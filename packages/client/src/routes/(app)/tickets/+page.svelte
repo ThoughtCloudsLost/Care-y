@@ -119,6 +119,7 @@
   } from "$lib/tickets/resolve-volunteer.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
+  import { ticketSearchScope } from "$lib/search/providers/tickets.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import TicketListOverlays from "./TicketListOverlays.svelte";
@@ -548,7 +549,14 @@
     fetchNextPage: async () => ticketsQuery.fetchNextPage(),
     isInitialLoading: () => ticketsQuery.isLoading,
     loadedCount: () => allTickets.length,
+    // The counts query totals the whole org while a filtered run pages a
+    // narrower list, so under a filter the total is withheld and the stopped
+    // line reports the loaded count.
+    totalCount: () =>
+      filterStore.activeCount === 0 ? countsQuery.data?.total : undefined,
     matchCount: () => titleMatchIds.length,
+    // Scope the deeper search's fetch to the filters the list shows.
+    fullSearchScope: () => ticketSearchScope(filterStore.serverParams),
   });
 
   const searchMatches = $derived(
@@ -1034,6 +1042,12 @@
     },
   });
 
+  // Widening the search from the search bar clears the filters but keeps
+  // match-first ordering, which the shared onchange would turn off.
+  function clearFiltersFromSearch(): void {
+    dispatch.clearAll({ skipOnchange: true });
+  }
+
   const datePill = $derived(ticketDatePillProps(filterStore));
 
   const filterSummary = $derived(
@@ -1215,6 +1229,18 @@
     deepSearchStatus={deepSearch.status}
     deepSearchSearched={deepSearch.searched}
     deepSearchTotal={deepSearch.total}
+    ondeepsearchretry={deepSearch.retry}
+    deepSearchIncompleteText={deepSearch.status === "incomplete"
+      ? m.search_deep_incomplete(
+          withTerms({ searched: deepSearch.searched, total: deepSearch.total }),
+        )
+      : undefined}
+    onclearfilters={filterStore.activeCount > 0
+      ? clearFiltersFromSearch
+      : undefined}
+    clearFiltersLabel={filterStore.activeCount > 0
+      ? m.search_filter_scoped_clear(withTerms())
+      : undefined}
   />
 {/snippet}
 

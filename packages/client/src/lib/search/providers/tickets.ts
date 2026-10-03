@@ -5,6 +5,7 @@ import type {
   SearchResult,
 } from "../types.js";
 import { fuzzySearch } from "../fuzzy.js";
+import { fullSearchScopeKey, UNSCOPED_SCOPE_KEY } from "../registry.svelte.js";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import {
   mapTicketDisplayFields,
@@ -18,6 +19,7 @@ import TicketSearchResult from "$lib/components/search/TicketSearchResult.svelte
 import Ticket from "$lib/components/icons/Ticket.svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
+import type { TicketListServerParams } from "$lib/stores/filters.svelte.js";
 
 /**
  * Raw ticket record from the TanStack Query cache. Carries encrypted
@@ -39,6 +41,40 @@ export interface TicketSearchData extends TicketDisplayFields {
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   /** The query that produced this result; renders the <mark> highlights. */
   readonly searchTerm: string;
+}
+
+/**
+ * The filter part of the ticket list's server params: what a deeper search
+ * run is narrowed to. Sort and page size are the provider's own concern.
+ */
+export type TicketSearchScope = Omit<
+  TicketListServerParams,
+  "sortBy" | "sortDirection" | "limit"
+>;
+
+/**
+ * The filter fields of the list's server params, for a scoped run, or
+ * undefined when no server filter is set. Array fields are sorted, so the
+ * same selection made in another order gives the same scope key.
+ */
+export function ticketSearchScope(
+  params: TicketListServerParams,
+): TicketSearchScope | undefined {
+  const scope: TicketSearchScope = {
+    statuses: params.statuses,
+    onHold: params.onHold,
+    queueIds:
+      params.queueIds === undefined ? undefined : [...params.queueIds].sort(),
+    priorities:
+      params.priorities === undefined
+        ? undefined
+        : [...params.priorities].sort(),
+    assignedTo: params.assignedTo,
+    createdAfter: params.createdAfter,
+    createdBefore: params.createdBefore,
+  };
+  const values: readonly unknown[] = Object.values(scope);
+  return values.every((value) => value === undefined) ? undefined : scope;
 }
 
 interface KeyWrap {
@@ -79,7 +115,14 @@ export interface TicketSearchProviderDeps {
 
   // -- Full search deps --
 
-  readonly listAll?: (cursor?: string) => Promise<readonly RawCachedTicket[]>;
+  /**
+   * One page of tickets for the deeper search, narrowed by `scope` when the
+   * calling surface has filters active.
+   */
+  readonly listAll?: (
+    cursor?: string,
+    scope?: TicketSearchScope,
+  ) => Promise<readonly RawCachedTicket[]>;
   /** Set the full-search cache entry in TanStack (single key, accumulated). */
   readonly ingestTickets?: (tickets: readonly RawCachedTicket[]) => void;
   /** Resolves when all pending decrypts in TicketDecryptCache have completed. */
@@ -110,11 +153,15 @@ export interface TicketSearchProviderDeps {
 
 export function createTicketSearchProvider(
   deps: TicketSearchProviderDeps,
-): SearchProvider<TicketSearchData> {
+): SearchProvider<TicketSearchData, TicketSearchScope> {
   // Content matches from fullSearch content search, keyed by ticket ID.
   // SvelteSet so search() reads are tracked in $derived contexts.
   const contentMatchIds = new SvelteSet<string>();
   let lastFullSearchQuery = "";
+  // Scope key of the run that filled contentMatchIds. search() serves the
+  // global search, which is unscoped, so it only adds content matches from
+  // an unscoped run.
+  let lastFullSearchScopeKey = UNSCOPED_SCOPE_KEY;
 
   function composeSearchData(
     raw: RawCachedTicket,
@@ -131,7 +178,7 @@ export function createTicketSearchProvider(
     };
   }
 
-  const provider: SearchProvider<TicketSearchData> = {
+  const provider: SearchProvider<TicketSearchData, TicketSearchScope> = {
     id: "tickets",
     label: () => m.search_section_tickets(withTerms()),
     icon: Ticket,
@@ -140,6 +187,11 @@ export function createTicketSearchProvider(
     getResultHref: (id: string) => `/tickets/${id}`,
     emptyText: (query: string) => m.search_empty_tickets(withTerms({ query })),
     coverage: (c) => {
+      if (c.fullSearch === "incomplete") {
+        return m.search_deep_incomplete(
+          withTerms({ searched: c.fsSearched, total: c.fsTotal }),
+        );
+      }
       if (c.fullSearch === "searching") {
         return m.search_coverage_searching({
           searched: c.fsSearched,
@@ -221,7 +273,11 @@ export function createTicketSearchProvider(
       // Include content-matched tickets from fullSearch content search.
       // SvelteSet.has() is tracked in $derived, so additions from async
       // fullSearch trigger re-evaluation automatically.
-      if (query === lastFullSearchQuery && contentMatchIds.size > 0) {
+      if (
+        query === lastFullSearchQuery &&
+        lastFullSearchScopeKey === UNSCOPED_SCOPE_KEY &&
+        contentMatchIds.size > 0
+      ) {
         for (const entry of searchable) {
           if (contentMatchIds.has(entry.raw.id) && !seen.has(entry.raw.id)) {
             seen.add(entry.raw.id);
@@ -273,6 +329,7 @@ export function createTicketSearchProvider(
     reset() {
       contentMatchIds.clear();
       lastFullSearchQuery = "";
+      lastFullSearchScopeKey = UNSCOPED_SCOPE_KEY;
       deps.clearFollowUpCache?.();
     },
   };
@@ -296,9 +353,12 @@ export function createTicketSearchProvider(
       state: FullSearchState,
       onProgress: () => void,
       signal: AbortSignal,
+      scope?: TicketSearchScope,
     ): Promise<void> => {
       const PAGE_SIZE = 100;
       const CONTENT_PAGE_SIZE = 50;
+      // contentSearchInputSchema caps ticketIds at 500 per request.
+      const CONTENT_CHUNK_SIZE = 500;
 
       // Read through a call, not `signal.aborted` directly: TypeScript
       // narrows the property to false after the first check and never
@@ -308,6 +368,7 @@ export function createTicketSearchProvider(
 
       contentMatchIds.clear();
       lastFullSearchQuery = query;
+      lastFullSearchScopeKey = fullSearchScopeKey(scope);
 
       // -- title search: load all tickets into TanStack cache, decrypt titles --
       let cursor: string | undefined;
@@ -321,9 +382,20 @@ export function createTicketSearchProvider(
         if (aborted()) return;
         let page: readonly RawCachedTicket[];
         try {
-          page = await listAll(cursor);
-        } catch {
-          break;
+          page = await listAll(cursor, scope);
+        } catch (err) {
+          // Record how far the run got before the registry marks it
+          // incomplete: nothing was content-searched yet, and the total is
+          // the server's count when known for an unscoped run, and the
+          // loaded count for a scoped one, since the server count totals the
+          // whole org.
+          state.total =
+            scope === undefined
+              ? (deps.getTotalItemCount?.() ?? totalLoaded)
+              : totalLoaded;
+          state.searched = 0;
+          onProgress();
+          throw err;
         }
 
         totalLoaded += page.length;
@@ -349,7 +421,11 @@ export function createTicketSearchProvider(
       state.total = totalLoaded;
       onProgress();
 
-      ingestTickets(allTickets);
+      // The fullSearch cache entry is replaced whole, so a scoped run leaves
+      // it alone: writing the filtered subset would drop tickets an earlier
+      // unscoped run put there. The page's own list query already holds the
+      // scoped tickets, and title matching reads every tickets list entry.
+      if (scope === undefined) ingestTickets(allTickets);
       await whenDecryptsSettled();
       if (aborted()) return;
 
@@ -365,79 +441,90 @@ export function createTicketSearchProvider(
       const nonMatchingIds = allTicketIds.filter(
         (id) => !titleMatchIds.has(id) && ticketKeyWraps.has(id),
       );
+      // Everything outside the content pass is settled: title matches, and
+      // tickets with no key wrap (no title or follow-up can be read).
+      state.searched = state.total - nonMatchingIds.length;
+      onProgress();
       if (nonMatchingIds.length === 0) return;
 
-      let contentPage = 1;
+      for (
+        let start = 0;
+        start < nonMatchingIds.length;
+        start += CONTENT_CHUNK_SIZE
+      ) {
+        const chunk = nonMatchingIds.slice(start, start + CONTENT_CHUNK_SIZE);
+        let contentPage = 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- loop breaks on short page
-      while (true) {
-        if (aborted()) return;
-        let batch: Awaited<ReturnType<typeof contentSearch>>;
-        try {
-          batch = await contentSearch(
-            nonMatchingIds,
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- loop breaks on short page
+        while (true) {
+          if (aborted()) return;
+          const batch = await contentSearch(
+            chunk,
             contentPage,
             CONTENT_PAGE_SIZE,
           );
-        } catch {
-          break;
-        }
 
-        // Trigger decrypts for all follow-ups in this batch
-        const pendingFollowUps: {
-          ticketId: string;
-          followupId: string;
-          kw: KeyWrap;
-          ciphertext: string;
-        }[] = [];
+          // Trigger decrypts for all follow-ups in this batch
+          const pendingFollowUps: {
+            ticketId: string;
+            followupId: string;
+            kw: KeyWrap;
+            ciphertext: string;
+          }[] = [];
 
-        for (const fu of batch.followups) {
-          if (
-            titleMatchIds.has(fu.ticketId) ||
-            contentMatchIds.has(fu.ticketId)
-          )
-            continue;
-          const kw = ticketKeyWraps.get(fu.ticketId);
-          if (!kw) continue;
-          decryptFollowUp(fu.ticketId, fu.followupId, kw, fu.encryptedContent);
-          pendingFollowUps.push({
-            ticketId: fu.ticketId,
-            followupId: fu.followupId,
-            kw,
-            ciphertext: fu.encryptedContent,
-          });
-        }
-
-        await whenDecryptsSettled();
-        // Checked again after the await: past this point the loop starts
-        // adding to contentMatchIds, which a newer run has already cleared.
-        if (aborted()) return;
-
-        // Check decrypted content for matches
-        for (const pf of pendingFollowUps) {
-          if (contentMatchIds.has(pf.ticketId)) continue;
-          const plaintext = decryptFollowUp(
-            pf.ticketId,
-            pf.followupId,
-            pf.kw,
-            pf.ciphertext,
-          );
-          if (
-            plaintext !== undefined &&
-            plaintext !== DECRYPT_ERROR_SENTINEL &&
-            fuzzySearch([plaintext], query).length > 0
-          ) {
-            contentMatchIds.add(pf.ticketId);
-            state.matchCount++;
-            onProgress();
+          for (const fu of batch.followups) {
+            if (
+              titleMatchIds.has(fu.ticketId) ||
+              contentMatchIds.has(fu.ticketId)
+            )
+              continue;
+            const kw = ticketKeyWraps.get(fu.ticketId);
+            if (!kw) continue;
+            decryptFollowUp(
+              fu.ticketId,
+              fu.followupId,
+              kw,
+              fu.encryptedContent,
+            );
+            pendingFollowUps.push({
+              ticketId: fu.ticketId,
+              followupId: fu.followupId,
+              kw,
+              ciphertext: fu.encryptedContent,
+            });
           }
+
+          await whenDecryptsSettled();
+          // Checked again after the await: past this point the loop starts
+          // adding to contentMatchIds, which a newer run has already cleared.
+          if (aborted()) return;
+
+          // Check decrypted content for matches
+          for (const pf of pendingFollowUps) {
+            if (contentMatchIds.has(pf.ticketId)) continue;
+            const plaintext = decryptFollowUp(
+              pf.ticketId,
+              pf.followupId,
+              pf.kw,
+              pf.ciphertext,
+            );
+            if (
+              plaintext !== undefined &&
+              plaintext !== DECRYPT_ERROR_SENTINEL &&
+              fuzzySearch([plaintext], query).length > 0
+            ) {
+              contentMatchIds.add(pf.ticketId);
+              state.matchCount++;
+              onProgress();
+            }
+          }
+
+          if (batch.followups.length < CONTENT_PAGE_SIZE) break;
+          contentPage++;
         }
 
-        state.searched = totalLoaded + contentPage * CONTENT_PAGE_SIZE;
+        state.searched += chunk.length;
         onProgress();
-
-        if (batch.followups.length < CONTENT_PAGE_SIZE) break;
-        contentPage++;
       }
     };
   }

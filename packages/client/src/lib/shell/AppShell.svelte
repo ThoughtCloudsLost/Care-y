@@ -562,8 +562,12 @@
           );
           return counts?.total;
         },
-        listAll: async (cursor) => {
+        // The tickets page passes its active filters as scope, so the run
+        // fetches only the tickets that page can show. The global search
+        // passes none and its run covers every ticket the account can reach.
+        listAll: async (cursor, scope) => {
           const result = await ticketsRouter.list.query({
+            ...scope,
             limit: 100,
             cursor,
           });

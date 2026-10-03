@@ -57,6 +57,12 @@ export interface FilterDispatchConfig {
   readonly onchange?: () => void;
 }
 
+/** Options for one clearAll call. */
+export interface ClearAllOptions {
+  /** Clear without calling onchange, for a caller that keeps what it resets. */
+  readonly skipOnchange?: boolean;
+}
+
 // ── Return type ──
 
 export interface FilterDispatch {
@@ -64,7 +70,7 @@ export interface FilterDispatch {
   readonly handlePillSelect: (pillId: string, value: string | null) => void;
   readonly handlePillDateChange: (from: Date | null, to: Date | null) => void;
   readonly handleSortChange: (field: string, dir: "asc" | "desc") => void;
-  readonly clearAll: () => void;
+  readonly clearAll: (options?: ClearAllOptions) => void;
   readonly handleSavedFilterApply: (record: SavedFilterRecord) => void;
   readonly handleSavedFilterDelete: (id: string) => void;
   readonly handleSavedFilterToggleShare: (id: string) => void;
@@ -117,9 +123,9 @@ export function createFilterDispatch(
     }
   }
 
-  function clearAll(): void {
+  function clearAll(options?: ClearAllOptions): void {
     config.clearAll();
-    config.onchange?.();
+    if (options?.skipOnchange !== true) config.onchange?.();
   }
 
   function handleSavedFilterApply(record: SavedFilterRecord): void {

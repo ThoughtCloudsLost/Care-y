@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/svelte";
-import type { SearchProvider, FullSearchState } from "./types.js";
+import type {
+  CoverageState,
+  SearchProvider,
+  FullSearchState,
+} from "./types.js";
 import {
   registerSearchProvider,
   searchAll,
@@ -16,6 +20,8 @@ import {
   providerHasFullSearch,
   getFullSearchStateForProvider,
   setPromotedOverride,
+  fullSearchScopeKey,
+  UNSCOPED_SCOPE_KEY,
 } from "./registry.svelte.js";
 
 afterEach(() => {
@@ -55,6 +61,8 @@ function mockFullSearchProvider(
       query: string,
       state: FullSearchState,
       onProgress: () => void,
+      signal?: AbortSignal,
+      scope?: unknown,
     ) => Promise<void>;
     resetFn?: () => void;
   } = {},
@@ -164,6 +172,25 @@ describe("registerSearchProvider / searchAll", () => {
     expect(groups[0]!.showAllHref).toBe("/tickets?q=housing");
 
     unregister();
+  });
+});
+
+describe("fullSearchScopeKey", () => {
+  it("keys an unscoped run as the unscoped key", () => {
+    expect(fullSearchScopeKey(undefined)).toBe(UNSCOPED_SCOPE_KEY);
+    expect(fullSearchScopeKey(null)).toBe(UNSCOPED_SCOPE_KEY);
+  });
+
+  it("gives equal scopes the same key and different scopes different keys", () => {
+    expect(fullSearchScopeKey({ queueIds: ["q1"] })).toBe(
+      fullSearchScopeKey({ queueIds: ["q1"] }),
+    );
+    expect(fullSearchScopeKey({ queueIds: ["q1"] })).not.toBe(
+      fullSearchScopeKey({ queueIds: ["q2"] }),
+    );
+    expect(fullSearchScopeKey({ queueIds: ["q1"] })).not.toBe(
+      UNSCOPED_SCOPE_KEY,
+    );
   });
 });
 
@@ -339,6 +366,63 @@ describe("fullSearch callback coordination", () => {
     expect(ticketState?.status).toBe("done");
     expect(ticketState?.searched).toBe(20);
     expect(ticketState?.matchCount).toBe(4);
+
+    unregister();
+  });
+
+  it("runFullSearch runs providers unscoped", async () => {
+    const scopes: unknown[] = [];
+    const unregister = registerSearchProvider(
+      mockFullSearchProvider("tickets", {
+        fullSearchFn: async (
+          _q: string,
+          _state: FullSearchState,
+          _onProgress: () => void,
+          _signal?: AbortSignal,
+          scope?: unknown,
+        ) => {
+          scopes.push(scope);
+        },
+      }),
+    );
+
+    runFullSearch("test");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0]).toBeUndefined();
+
+    unregister();
+  });
+
+  it("leaves a run scoped to page filters out of the global search's coverage", async () => {
+    const coverage = vi.fn(() => undefined);
+    const unregister = registerSearchProvider({
+      ...mockFullSearchProvider("tickets", {
+        fullSearchFn: async (
+          _q: string,
+          state: FullSearchState,
+          onProgress: () => void,
+        ) => {
+          state.total = 4;
+          state.searched = 4;
+          state.matchCount = 1;
+          onProgress();
+        },
+      }),
+      coverage,
+    });
+
+    runFullSearchForProvider("tickets", "harbor", { queueIds: ["q1"] });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getFullSearchStateForProvider("tickets")?.status).toBe("done");
+
+    const groups = searchAll("harbor");
+    expect(coverage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ fullSearch: undefined }),
+    );
+    const group = groups.find((g) => g.providerId === "tickets");
+    expect(group?.incomplete).toBe(false);
 
     unregister();
   });
@@ -582,6 +666,119 @@ describe("edge cases", () => {
 
       unregister();
     });
+
+    it("hands the caller's scope to the provider's fullSearch", async () => {
+      const scopes: unknown[] = [];
+      const unregister = registerSearchProvider(
+        mockFullSearchProvider("tickets", {
+          fullSearchFn: async (
+            _q: string,
+            _state: FullSearchState,
+            _onProgress: () => void,
+            _signal?: AbortSignal,
+            scope?: unknown,
+          ) => {
+            scopes.push(scope);
+          },
+        }),
+      );
+
+      const scope = { queueIds: ["q1"] };
+      runFullSearchForProvider("tickets", "test", scope);
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(scopes).toHaveLength(1);
+      expect(scopes[0]).toBe(scope);
+
+      unregister();
+    });
+
+    it("records the run's scope key on the provider state", async () => {
+      const unregister = registerSearchProvider(
+        mockFullSearchProvider("tickets", {
+          fullSearchFn: async () => undefined,
+        }),
+      );
+
+      runFullSearchForProvider("tickets", "harbor", { queueIds: ["q1"] });
+      expect(getFullSearchStateForProvider("tickets")?.scopeKey).toBe(
+        fullSearchScopeKey({ queueIds: ["q1"] }),
+      );
+
+      runFullSearch("harbor");
+      expect(getFullSearchStateForProvider("tickets")?.scopeKey).toBe(
+        UNSCOPED_SCOPE_KEY,
+      );
+
+      await new Promise((r) => setTimeout(r, 0));
+      unregister();
+    });
+
+    it("replaces a running search over a different scope with a fresh run", async () => {
+      const calls: { scope: unknown; signal: AbortSignal | undefined }[] = [];
+      let resolve: () => void;
+      const pending = new Promise<void>((r) => {
+        resolve = r;
+      });
+      const unregister = registerSearchProvider(
+        mockFullSearchProvider("tickets", {
+          fullSearchFn: async (
+            _q: string,
+            state: FullSearchState,
+            onProgress: () => void,
+            signal?: AbortSignal,
+            scope?: unknown,
+          ) => {
+            calls.push({ scope, signal });
+            if (calls.length === 1) {
+              state.searched = 3;
+              onProgress();
+            }
+            await pending;
+          },
+        }),
+      );
+
+      runFullSearchForProvider("tickets", "harbor", { queueIds: ["q1"] });
+      runFullSearchForProvider("tickets", "harbor");
+
+      expect(calls).toHaveLength(2);
+      expect(calls[0]?.signal?.aborted).toBe(true);
+      expect(calls[1]?.scope).toBeUndefined();
+      expect(getFullSearchStateForProvider("tickets")).toEqual(
+        expect.objectContaining({
+          status: "searching",
+          scopeKey: UNSCOPED_SCOPE_KEY,
+          searched: 0,
+        }),
+      );
+
+      resolve!();
+      await new Promise((r) => setTimeout(r, 0));
+      unregister();
+    });
+
+    it("joins a running search over the same scope", async () => {
+      let resolve: () => void;
+      const pending = new Promise<void>((r) => {
+        resolve = r;
+      });
+      const fullSearch = vi.fn(async (): Promise<void> => {
+        await pending;
+      });
+      const unregister = registerSearchProvider(
+        mockFullSearchProvider("tickets", { fullSearchFn: fullSearch }),
+      );
+
+      runFullSearchForProvider("tickets", "harbor", { queueIds: ["q1"] });
+      runFullSearchForProvider("tickets", "harbor", { queueIds: ["q1"] });
+
+      expect(fullSearch).toHaveBeenCalledTimes(1);
+
+      resolve!();
+      await new Promise((r) => setTimeout(r, 0));
+      unregister();
+    });
   });
 
   describe("setPromotedOverride", () => {
@@ -687,5 +884,87 @@ describe("edge cases", () => {
 
       unregister();
     });
+  });
+});
+
+describe("failed full search runs", () => {
+  it("records a rejected run as incomplete and drops the escalation button", async () => {
+    const coverage = vi.fn((_state: CoverageState): string => "coverage line");
+    const unregister = registerSearchProvider({
+      ...mockFullSearchProvider("tickets", {
+        fullSearchFn: async (
+          _q: string,
+          state: FullSearchState,
+          onProgress: () => void,
+        ) => {
+          state.total = 10;
+          state.searched = 4;
+          state.matchCount = 1;
+          onProgress();
+          throw new Error("page decrypt failed");
+        },
+      }),
+      coverage,
+      fullSearchLabel: () => "Search the rest",
+    });
+
+    runFullSearchForProvider("tickets", "harbor");
+    await new Promise((r) => setTimeout(r, 0));
+
+    const ticketState = getFullSearchStateForProvider("tickets");
+    expect(ticketState?.status).toBe("incomplete");
+    expect(ticketState?.searched).toBe(4);
+    expect(ticketState?.total).toBe(10);
+
+    const group = searchAll("harbor").find((g) => g.providerId === "tickets");
+    expect(group?.incomplete).toBe(true);
+    expect(group?.fetchMoreLabel).toBeUndefined();
+    expect(coverage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        fullSearch: "incomplete",
+        fsSearched: 4,
+        fsTotal: 10,
+      }),
+    );
+
+    unregister();
+  });
+
+  it("ignores a stale run's rejection after a newer run started", async () => {
+    const pending: Array<{
+      resolve: () => void;
+      reject: (reason: Error) => void;
+    }> = [];
+    const unregister = registerSearchProvider(
+      mockFullSearchProvider("tickets", {
+        fullSearchFn: async (
+          _q: string,
+          state: FullSearchState,
+          onProgress: () => void,
+        ) => {
+          state.total = 10;
+          state.searched = 2;
+          onProgress();
+          await new Promise<void>((resolve, reject) => {
+            pending.push({ resolve, reject });
+          });
+        },
+      }),
+    );
+
+    runFullSearchForProvider("tickets", "first");
+    // runFullSearch starts a fresh run without waiting on the first.
+    runFullSearch("second");
+    expect(pending).toHaveLength(2);
+
+    pending[0]?.reject(new Error("stale run failed"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getFullSearchStateForProvider("tickets")?.status).toBe("searching");
+
+    pending[1]?.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getFullSearchStateForProvider("tickets")?.status).toBe("done");
+
+    unregister();
   });
 });

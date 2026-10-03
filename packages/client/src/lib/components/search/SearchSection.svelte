@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Component, Snippet } from "svelte";
+  import { RotateCw } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
@@ -22,6 +23,8 @@
     coverageText?: string;
     /** Calm escalation button label; absent hides the button. */
     fetchMoreLabel?: string;
+    /** Retry a stopped full search; renders an icon button beside the coverage line. */
+    onretry?: () => void;
     children: Snippet;
   }
 
@@ -40,6 +43,7 @@
     emptyText,
     coverageText,
     fetchMoreLabel,
+    onretry,
     children,
   }: SearchSectionProps = $props();
 
@@ -88,7 +92,19 @@
     {@render children()}
   {/if}
   {#if coverageText != null}
-    <p class="cover num" aria-live="polite">{coverageText}</p>
+    <div class="cover-row">
+      <p class="cover num" aria-live="polite">{coverageText}</p>
+      {#if onretry}
+        <button
+          type="button"
+          class="cover-retry calm-escalation"
+          aria-label={m.common_retry()}
+          onclick={onretry}
+        >
+          <RotateCw size={16} aria-hidden="true" />
+        </button>
+      {/if}
+    </div>
   {/if}
   {#if fetchMoreLabel != null && onFullSearch}
     <button
@@ -134,13 +150,35 @@
     color: var(--muted);
   }
 
+  .cover-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+  }
+
   /* Honest coverage in plain words, below what it describes. */
   .cover {
+    flex: 1;
+    min-width: 0;
     padding: 6px var(--page-pad-x, 0.75rem) 0;
     font-size: 0.75rem;
     line-height: 1.5;
     color: var(--muted);
     margin: 0;
+  }
+
+  /* Icon-sized placement of the shared calm-escalation anatomy, the
+     same retry control the search bar shows. */
+  .cover-retry {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border-radius: 0.5625rem;
+    flex-shrink: 0;
+    margin: 6px var(--page-pad-x, 0.75rem) 0 0;
   }
 
   /* Full-width placement of the shared calm-escalation anatomy. */

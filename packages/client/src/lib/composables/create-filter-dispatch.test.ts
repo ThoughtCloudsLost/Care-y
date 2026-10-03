@@ -220,6 +220,17 @@ describe("createFilterDispatch", () => {
       expect(clearAll).toHaveBeenCalledOnce();
       expect(onchange).toHaveBeenCalledOnce();
     });
+
+    it("clears without firing onchange when asked to skip it", () => {
+      const clearAll = vi.fn();
+      const onchange = vi.fn();
+      const d = createFilterDispatch(makeConfig({ clearAll, onchange }));
+
+      d.clearAll({ skipOnchange: true });
+
+      expect(clearAll).toHaveBeenCalledOnce();
+      expect(onchange).not.toHaveBeenCalled();
+    });
   });
 
   describe("saved filters", () => {

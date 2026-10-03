@@ -38,18 +38,33 @@ export function setPromotedOverride(...providerIds: string[]): () => void {
  * can register without a cast. The registry stores them as SearchProvider<unknown>
  * since it only passes result.data through to the provider's own ResultItem.
  */
-export function registerSearchProvider<T>(
-  provider: SearchProvider<T>,
+export function registerSearchProvider<T, S>(
+  provider: SearchProvider<T, S>,
 ): () => void {
   // Variance erasure: providers are stored as SearchProvider<unknown>.
   // Safe because the registry only passes result.data back to the
-  // provider's own ResultItem, which knows the concrete type.
+  // provider's own ResultItem, which knows the concrete type. The scope
+  // type is erased the same way and only travels back to the provider's
+  // own fullSearch.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- variance erasure at registry boundary
   providers.set(provider.id, provider as unknown as SearchProvider);
   return () => {
     providers.delete(provider.id);
   };
 }
+
+/**
+ * Identity of a full search run's scope. It is recorded on the provider
+ * state, and a surface reuses a run only when its own key matches. An
+ * unscoped run (the global search, or a page with no server filter set)
+ * keys as UNSCOPED_SCOPE_KEY.
+ */
+export function fullSearchScopeKey(scope: unknown): string {
+  return JSON.stringify(scope ?? null);
+}
+
+/** Scope key of an unscoped run. */
+export const UNSCOPED_SCOPE_KEY = fullSearchScopeKey(undefined);
 
 /**
  * Search all registered providers. Call from a $derived block
@@ -74,7 +89,11 @@ export function searchAll(
 
   for (const [, provider] of providers) {
     const searchResult = provider.search(query);
-    const fs = fullSearchStates.find((s) => s.providerId === provider.id);
+    // The global search is unscoped. A run a page scoped to its filters
+    // covers another set, so it counts as not run here.
+    const fs = fullSearchStates.find(
+      (s) => s.providerId === provider.id && s.scopeKey === UNSCOPED_SCOPE_KEY,
+    );
 
     groups.push({
       providerId: provider.id,
@@ -97,6 +116,7 @@ export function searchAll(
         fsSearched: fs?.searched ?? 0,
         fsTotal: fs?.total ?? 0,
       }),
+      incomplete: fs?.status === "incomplete",
       // The calm escalation only offers itself before a full search has
       // run; while searching or after done the coverage line carries it.
       fetchMoreLabel:
@@ -138,7 +158,9 @@ export function getProvider(id: string): SearchProvider | undefined {
 export interface FullSearchProviderState {
   readonly providerId: string;
   readonly label: string;
-  status: "idle" | "searching" | "done";
+  /** fullSearchScopeKey of the scope this run covers. */
+  readonly scopeKey: string;
+  status: "idle" | "searching" | "done" | "incomplete";
   searched: number;
   total: number;
   matchCount: number;
@@ -195,6 +217,7 @@ function startProviderRun(
   provider: SearchProvider,
   query: string,
   state: FullSearchState,
+  scope: unknown,
 ): void {
   if (!provider.fullSearch) return;
 
@@ -204,11 +227,20 @@ function startProviderRun(
     updateProviderState(provider.id, state);
   };
 
-  void provider.fullSearch(query, state, onProgress, signal).then(() => {
-    if (!isCurrentRun(provider.id, generation)) return;
-    state.status = "done";
-    updateProviderState(provider.id, state);
-  });
+  void provider.fullSearch(query, state, onProgress, signal, scope).then(
+    () => {
+      if (!isCurrentRun(provider.id, generation)) return;
+      state.status = "done";
+      updateProviderState(provider.id, state);
+    },
+    // A failed run is terminal but must not report as a completed sweep,
+    // and leaving it at "searching" would hang the coverage line forever.
+    () => {
+      if (!isCurrentRun(provider.id, generation)) return;
+      state.status = "incomplete";
+      updateProviderState(provider.id, state);
+    },
+  );
 }
 
 function updateProviderState(providerId: string, state: FullSearchState): void {
@@ -248,6 +280,7 @@ export function runFullSearch(query: string): void {
   fullSearchStates = providersWithFullSearch.map((p) => ({
     providerId: p.id,
     label: p.label(),
+    scopeKey: UNSCOPED_SCOPE_KEY,
     status: "searching" as const,
     searched: 0,
     total: 0,
@@ -255,12 +288,18 @@ export function runFullSearch(query: string): void {
   }));
 
   for (const provider of providersWithFullSearch) {
-    startProviderRun(provider, query, {
-      status: "searching",
-      searched: 0,
-      total: 0,
-      matchCount: 0,
-    });
+    // The global search has no filters, so its runs are unscoped.
+    startProviderRun(
+      provider,
+      query,
+      {
+        status: "searching",
+        searched: 0,
+        total: 0,
+        matchCount: 0,
+      },
+      undefined,
+    );
   }
 }
 
@@ -284,16 +323,30 @@ export function getContentMatchIds(
   return providers.get(providerId)?.getContentMatchIds?.();
 }
 
-/** Trigger full search for a single provider. */
+/**
+ * Trigger full search for a single provider.
+ *
+ * `scope` is the calling surface's filter scope, handed to the provider's
+ * fullSearch unchanged; the global search passes none.
+ *
+ * A running search is joined only when it covers the same scope; otherwise a
+ * new run replaces it.
+ */
 export function runFullSearchForProvider(
   providerId: string,
   query: string,
+  scope?: unknown,
 ): void {
   const provider = providers.get(providerId);
   if (!provider?.fullSearch) return;
 
+  const scopeKey = fullSearchScopeKey(scope);
   const existing = fullSearchStates.find((s) => s.providerId === providerId);
-  if (existing?.status === "searching") return;
+  // A running search over the same scope is joined. One over a different
+  // scope is replaced: its matches and counts cover another set.
+  if (existing?.status === "searching" && existing.scopeKey === scopeKey) {
+    return;
+  }
 
   const state: FullSearchState = {
     status: "searching",
@@ -301,21 +354,18 @@ export function runFullSearchForProvider(
     total: 0,
     matchCount: 0,
   };
+  const entry: FullSearchProviderState = {
+    providerId: provider.id,
+    label: provider.label(),
+    scopeKey,
+    ...state,
+  };
+  fullSearchStates =
+    existing === undefined
+      ? [...fullSearchStates, entry]
+      : fullSearchStates.map((s) => (s.providerId === providerId ? entry : s));
 
-  if (!existing) {
-    fullSearchStates = [
-      ...fullSearchStates,
-      {
-        providerId: provider.id,
-        label: provider.label(),
-        ...state,
-      },
-    ];
-  } else {
-    updateProviderState(providerId, state);
-  }
-
-  startProviderRun(provider, query, state);
+  startProviderRun(provider, query, state, scope);
 }
 
 /**
