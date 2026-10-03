@@ -601,8 +601,9 @@
     let succeeded = 0;
     let refused = 0;
 
-    // A refusal does not stop the run. The refused account stays selected so
-    // the admin can open it, where the single-account flow names the reason.
+    // A refusal does not stop the run. Refused accounts stay selected and
+    // highlighted so the admin can see which ones they were before leaving
+    // select mode.
     try {
       for (const uid of ids) {
         try {
@@ -629,10 +630,19 @@
       return;
     }
 
-    toastStore.show(
-      m.admin_users_batch_deactivate_result({ succeeded, refused }),
-      3000,
-    );
+    const doneText =
+      succeeded === 1
+        ? m.admin_users_batch_deactivate_result_done_one()
+        : m.admin_users_batch_deactivate_result_done_other({
+            count: succeeded,
+          });
+    const refusedText =
+      refused === 1
+        ? m.admin_users_batch_deactivate_result_refused_one()
+        : m.admin_users_batch_deactivate_result_refused_other({
+            count: refused,
+          });
+    toastStore.show(`${doneText} ${refusedText}`, 3000);
   }
 </script>
 

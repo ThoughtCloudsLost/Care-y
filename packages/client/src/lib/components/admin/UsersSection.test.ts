@@ -85,13 +85,19 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_users_batch_deactivate: () => "Deactivate selected",
   admin_users_batch_deactivated: ({ count }: { count: number }) =>
     `${count} deactivated`,
-  admin_users_batch_deactivate_result: ({
-    succeeded,
-    refused,
+  admin_users_batch_deactivate_result_done_one: () => "1 account deactivated.",
+  admin_users_batch_deactivate_result_done_other: ({
+    count,
   }: {
-    succeeded: number;
-    refused: number;
-  }) => `${succeeded} deactivated. ${refused} could not be deactivated.`,
+    count: number;
+  }) => `${count} accounts deactivated.`,
+  admin_users_batch_deactivate_result_refused_one: () =>
+    "1 could not be deactivated.",
+  admin_users_batch_deactivate_result_refused_other: ({
+    count,
+  }: {
+    count: number;
+  }) => `${count} could not be deactivated.`,
   admin_batch_deactivate_title_one: () => "Deactivate 1 account?",
   admin_batch_deactivate_title_other: ({ count }: { count: number }) =>
     `Deactivate ${count} accounts?`,
@@ -983,7 +989,7 @@ describe("UsersSection", () => {
 
       await waitFor(() => {
         expect(mockToastShow).toHaveBeenCalledWith(
-          "2 deactivated. 1 could not be deactivated.",
+          "2 accounts deactivated. 1 could not be deactivated.",
           3000,
         );
       });
@@ -1002,6 +1008,25 @@ describe("UsersSection", () => {
       expect(
         screen.getByRole("button", { name: "u-3", pressed: false }),
       ).toBeTruthy();
+    });
+
+    it("uses the singular forms when one account is deactivated and one is refused", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2")];
+      mockSetUserActive
+        .mockResolvedValueOnce({ user: { isActive: false } })
+        .mockRejectedValueOnce(new Error(ErrorCode.SOLE_WRAP_HOLDER));
+      const { dialog } = await openBatchDialog(["u-1", "u-2"]);
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith(
+          "1 account deactivated. 1 could not be deactivated.",
+          3000,
+        );
+      });
     });
 
     it("keeps the bulk dialog title on the confirmed count while the run removes accounts from the selection", async () => {
