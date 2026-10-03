@@ -53,9 +53,15 @@ test.describe.serial("Secure Link Portal", () => {
   let portalPage: Page;
   let portalLink = "";
   let passphrase = "";
+  // Seeded inbound messages carry their own key generation for good, so
+  // the convergence check only looks at follow-ups this spec created.
+  let suiteStartedAt = "";
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    // The database's own clock, so the comparison below never depends on
+    // the host and the container agreeing on the time.
+    suiteStartedAt = queryDb("SELECT now();");
     // All browser projects share one org: an earlier project's run left
     // this spec's client upgraded, and "Set up secure link" only renders
     // for a fresh SMS/Email client.
@@ -284,9 +290,17 @@ test.describe.serial("Secure Link Portal", () => {
     await expect
       .poll(() => countRows("portal_reply_key_wraps"), { timeout: 15_000 })
       .toBe(0);
+    // The scope has to contain this spec's own reply, or the zero below
+    // would be an empty set rather than a converged one.
+    const clientReplies = queryDb(
+      `SELECT count(*) FROM followups
+       WHERE source = 'client' AND created_at >= '${suiteStartedAt}';`,
+    ).trim();
+    expect(Number(clientReplies)).toBeGreaterThan(0);
     const pendingGenerations = queryDb(
       `SELECT count(*) FROM followups
-       WHERE source = 'client' AND key_generation IS NOT NULL;`,
+       WHERE source = 'client' AND key_generation IS NOT NULL
+         AND created_at >= '${suiteStartedAt}';`,
     ).trim();
     expect(Number(pendingGenerations)).toBe(0);
   });

@@ -27,10 +27,19 @@ test.describe.serial("Universal Search", () => {
     // Tap search icon in the navbar.
     await page.getByRole("button", { name: "Search" }).click();
 
-    // Sheet should slide up with the hint text (no recents on fresh session).
+    // The sheet opens on the hint when the user has no history, or on the
+    // recents sections otherwise. Recent views are mirrored to the server
+    // per user, so once any spec has opened a ticket as this user the
+    // recents stay for every later context.
     const sheet = page.locator("[role='search']");
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByText(/search.*tickets/i)).toBeVisible();
+    await expect(
+      sheet
+        .getByText(/search.*tickets/i)
+        .or(sheet.getByText("Recent", { exact: true }))
+        .or(sheet.getByText(/^viewed /i))
+        .first(),
+    ).toBeVisible();
   });
 
   // ── 2. Typing shows results ────────────────────────────────────

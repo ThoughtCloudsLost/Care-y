@@ -2,14 +2,16 @@ import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import {
+  CRYPTO_TIMEOUT,
   auditA11y,
   clickComposeAction,
-  CRYPTO_TIMEOUT,
+  createSecureLink,
   isDesktopLayout,
   login,
+  longPress,
   openComposeActions,
   openTicketByTitle,
-  longPress,
+  openTicketInfoPanel,
 } from "./helpers";
 
 test.describe.serial("Ticket Detail (Chat View)", () => {
@@ -175,18 +177,26 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await page.waitForTimeout(300);
 
     // Subject line (rendered via the ticket_email_subject_label i18n key).
-    const subject = page.locator('[data-testid="email-inbound-subject"]');
+    // The story ticket carries more than one inbound email, so every
+    // locator below is scoped to the bubble ([data-source]) that holds
+    // this subject.
+    const bubble = page.locator("[data-source]", {
+      has: page.locator('[data-testid="email-inbound-subject"]', {
+        hasText: "Re: your appointment",
+      }),
+    });
+    const subject = bubble.locator('[data-testid="email-inbound-subject"]');
     await expect(subject).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await expect(subject).toContainText("Re: your appointment");
 
     // Unverified From line (rendered via ticket_email_inbound_from_label).
-    const fromLine = page.locator('[data-testid="email-inbound-from"]');
+    const fromLine = bubble.locator('[data-testid="email-inbound-from"]');
     await expect(fromLine).toBeVisible();
-    await expect(fromLine).toContainText("client@example.org");
+    await expect(fromLine).toContainText("maria.l@example.org");
     await expect(fromLine).toContainText("unverified");
 
     // Caution affordance trigger button is visible.
-    const cautionTrigger = page.locator(
+    const cautionTrigger = bubble.locator(
       '[data-testid="email-inbound-caution-trigger"]',
     );
     await expect(cautionTrigger).toBeVisible();
@@ -195,9 +205,15 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   test("email_inbound caution affordance opens on keyboard focus+Enter and dismisses with Escape", async () => {
     // WCAG 1.4.13 (SEC-237): the affordance must be keyboard-reachable,
     // dismissable with Escape, and persistent until dismissed.
-    const cautionTrigger = page.locator(
-      '[data-testid="email-inbound-caution-trigger"]',
-    );
+    // Same bubble as the previous test: more than one inbound email
+    // renders a trigger.
+    const cautionTrigger = page
+      .locator("[data-source]", {
+        has: page.locator('[data-testid="email-inbound-subject"]', {
+          hasText: "Re: your appointment",
+        }),
+      })
+      .locator('[data-testid="email-inbound-caution-trigger"]');
     await expect(cautionTrigger).toBeVisible({ timeout: 5_000 });
 
     // Focus the trigger and activate with Enter.
@@ -353,7 +369,30 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 11. Preset fills compose (Checkpoint 8) ────────────────────
 
   test("compose actions popover opens preset sheet", async () => {
+    // Preset replies fill a portal reply, so the popover offers them only
+    // on a portal-capable ticket. No seed gives the story ticket a channel
+    // and the portal specs reset every client's tier, so set the link up
+    // here, the way the portal spec does for its own ticket.
+    // On a retry of this serial group, or a second run against one seed,
+    // the link from the first attempt is still there and the setup button
+    // never renders, so only create it when the client is still fresh.
+    await openTicketInfoPanel(page, "Communication");
+    const setupBtn = page
+      .getByRole("button", { name: /set up secure link/i })
+      .first();
+    const isFresh = await setupBtn
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (isFresh) {
+      await createSecureLink(page);
+      await expect(setupBtn).toHaveCount(0, { timeout: CRYPTO_TIMEOUT });
+    }
+
     const dialog = await openComposeActions(page);
+    await expect(dialog.getByText(/preset replies/i)).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     // Click "Preset replies" from the compose actions popover.
     await clickComposeAction(dialog, /preset replies/i);

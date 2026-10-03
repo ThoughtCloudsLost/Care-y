@@ -273,8 +273,10 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
 
     // The KB section may be collapsed from earlier tests. Expand it first.
     const kbSection = page.locator("#section-kb");
+    // Anchored: the section also holds a "Filter Library" link with the
+    // button role, which a bare /library/i would match as well.
     const sectionHeader = kbSection.getByRole("button", {
-      name: /library/i,
+      name: /^library/i,
     });
     const isExpanded = await sectionHeader.getAttribute("aria-expanded");
     if (isExpanded !== "true") {
