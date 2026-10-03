@@ -9,7 +9,7 @@
  * Optimistic concurrency via WHERE assigned_to IS NULL guards TOCTOU races.
  */
 
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { ShiftProvider } from "./shift-provider.js";
 import type { TicketAccessChecker } from "./access.js";
@@ -95,11 +95,12 @@ export function createAssignmentService(
   }
 
   async function createSystemFollowUp(
+    trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
     ticketId: TicketId,
     type: string,
     eventParams?: Record<string, unknown>,
   ): Promise<void> {
-    await db
+    await trxOrDb
       .insertInto("followups")
       .values({
         ticket_id: ticketId,
@@ -149,20 +150,26 @@ export function createAssignmentService(
 
       // Optimistic concurrency: only assign if still unassigned.
       // If another request raced us, numUpdatedRows === 0n.
-      const result = await db
-        .updateTable("tickets")
-        .set({ assigned_to: chosen })
-        .where("id", "=", ticketId)
-        .where("assigned_to", "is", null)
-        .executeTakeFirst();
+      const assigned = await db.transaction().execute(async (trx) => {
+        const result = await trx
+          .updateTable("tickets")
+          .set({ assigned_to: chosen })
+          .where("id", "=", ticketId)
+          .where("assigned_to", "is", null)
+          .executeTakeFirst();
 
-      if (result.numUpdatedRows === BigInt(0)) {
+        if (result.numUpdatedRows === BigInt(0)) return false;
+
+        await createSystemFollowUp(trx, ticketId, "volunteer_assigned", {
+          userId: chosen,
+        });
+        return true;
+      });
+
+      if (!assigned) {
         return { assignedTo: null };
       }
 
-      await createSystemFollowUp(ticketId, "volunteer_assigned", {
-        userId: chosen,
-      });
       deps?.onTicketChanged?.(ticketId);
       return { assignedTo: chosen };
     },
@@ -184,19 +191,24 @@ export function createAssignmentService(
         throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
       }
 
-      // Optimistic concurrency: WHERE assigned_to IS NULL guards the TOCTOU race.
-      const result = await db
-        .updateTable("tickets")
-        .set({ assigned_to: userId })
-        .where("id", "=", ticketId)
-        .where("assigned_to", "is", null)
-        .executeTakeFirst();
+      await db.transaction().execute(async (trx) => {
+        // Optimistic concurrency: WHERE assigned_to IS NULL guards the TOCTOU race.
+        const result = await trx
+          .updateTable("tickets")
+          .set({ assigned_to: userId })
+          .where("id", "=", ticketId)
+          .where("assigned_to", "is", null)
+          .executeTakeFirst();
 
-      if (result.numUpdatedRows === BigInt(0)) {
-        throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
-      }
+        if (result.numUpdatedRows === BigInt(0)) {
+          throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
+        }
 
-      await createSystemFollowUp(ticketId, "volunteer_assigned", { userId });
+        await createSystemFollowUp(trx, ticketId, "volunteer_assigned", {
+          userId,
+        });
+      });
+
       deps?.onTicketChanged?.(ticketId);
     },
 
@@ -214,13 +226,18 @@ export function createAssignmentService(
         throw new TicketError(ErrorCode.NOT_ASSIGNED_TO_TICKET);
       }
 
-      await db
-        .updateTable("tickets")
-        .set({ assigned_to: null })
-        .where("id", "=", ticketId)
-        .execute();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable("tickets")
+          .set({ assigned_to: null })
+          .where("id", "=", ticketId)
+          .execute();
 
-      await createSystemFollowUp(ticketId, "volunteer_unassigned", { userId });
+        await createSystemFollowUp(trx, ticketId, "volunteer_unassigned", {
+          userId,
+        });
+      });
+
       deps?.onTicketChanged?.(ticketId);
     },
 
@@ -254,21 +271,24 @@ export function createAssignmentService(
       // Skip DB write if assignment is already in the desired state
       if (ticket.assigned_to === targetUserId) return;
 
-      await db
-        .updateTable("tickets")
-        .set({ assigned_to: targetUserId })
-        .where("id", "=", ticketId)
-        .execute();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable("tickets")
+          .set({ assigned_to: targetUserId })
+          .where("id", "=", ticketId)
+          .execute();
 
-      if (targetUserId !== null) {
-        await createSystemFollowUp(ticketId, "volunteer_assigned", {
-          userId: targetUserId,
-        });
-      } else if (ticket.assigned_to !== null) {
-        await createSystemFollowUp(ticketId, "volunteer_unassigned", {
-          userId: ticket.assigned_to,
-        });
-      }
+        if (targetUserId !== null) {
+          await createSystemFollowUp(trx, ticketId, "volunteer_assigned", {
+            userId: targetUserId,
+          });
+        } else if (ticket.assigned_to !== null) {
+          await createSystemFollowUp(trx, ticketId, "volunteer_unassigned", {
+            userId: ticket.assigned_to,
+          });
+        }
+      });
+
       deps?.onTicketChanged?.(ticketId);
     },
   };

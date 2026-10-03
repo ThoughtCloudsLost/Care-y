@@ -1,11 +1,13 @@
 import * as crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   createTestDb,
   createTestUser,
   createTestQueue,
   createTestTicketFixture,
   seedOrgPublicKey,
+  withFailingFollowUpInserts,
+  FollowUpInsertFailure,
   type TestDb,
 } from "../test-utils.js";
 import { createTicketAccessChecker } from "./access.js";
@@ -15,6 +17,7 @@ import {
 } from "./assignment.js";
 import { createStubShiftProvider } from "./shift-provider.js";
 import { createQueuePermissionsService } from "./queue-permissions.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import { ForbiddenError, NotFoundError, TicketError } from "../errors.js";
 import {
   newTicketId,
@@ -332,5 +335,100 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     await expect(
       svc.assignTo(volunteerA, ticketId, crypto.randomUUID() as UserId),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  // --- a failed system follow-up rolls back the assignment ---
+
+  function createFailingService(
+    onTicketChanged: TicketChangeListener,
+  ): AssignmentService {
+    const access = createTicketAccessChecker(testDb.db);
+    const shift = createStubShiftProvider((qId) =>
+      createQueuePermissionsService(testDb.db).getQueueMembers(qId),
+    );
+    return createAssignmentService(
+      withFailingFollowUpInserts(testDb.db),
+      access,
+      shift,
+      { onTicketChanged },
+    );
+  }
+
+  async function followUpCount(ticketId: TicketId): Promise<number> {
+    const row = await testDb.db
+      .selectFrom("followups")
+      .select((eb) => eb.fn.countAll().as("count"))
+      .where("ticket_id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    return Number(row.count);
+  }
+
+  async function assignedTo(ticketId: TicketId): Promise<UserId | null> {
+    const row = await testDb.db
+      .selectFrom("tickets")
+      .select("assigned_to")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    return row.assigned_to;
+  }
+
+  it("assignRoundRobin leaves the ticket unassigned when its follow-up fails", async () => {
+    const ticketId = await insertTicket();
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const failing = createFailingService(onTicketChanged);
+    const followUpsBefore = await followUpCount(ticketId);
+
+    await expect(failing.assignRoundRobin(ticketId)).rejects.toBeInstanceOf(
+      FollowUpInsertFailure,
+    );
+
+    expect(await assignedTo(ticketId)).toBeNull();
+    expect(await followUpCount(ticketId)).toBe(followUpsBefore);
+    expect(onTicketChanged).not.toHaveBeenCalled();
+  });
+
+  it("take leaves the ticket unassigned when its follow-up fails", async () => {
+    const ticketId = await insertTicket();
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const failing = createFailingService(onTicketChanged);
+    const followUpsBefore = await followUpCount(ticketId);
+
+    await expect(failing.take(volunteerA, ticketId)).rejects.toBeInstanceOf(
+      FollowUpInsertFailure,
+    );
+
+    expect(await assignedTo(ticketId)).toBeNull();
+    expect(await followUpCount(ticketId)).toBe(followUpsBefore);
+    expect(onTicketChanged).not.toHaveBeenCalled();
+  });
+
+  it("release leaves the ticket assigned when its follow-up fails", async () => {
+    const ticketId = await insertTicket({ assignedTo: volunteerA });
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const failing = createFailingService(onTicketChanged);
+    const followUpsBefore = await followUpCount(ticketId);
+
+    await expect(failing.release(volunteerA, ticketId)).rejects.toBeInstanceOf(
+      FollowUpInsertFailure,
+    );
+
+    expect(await assignedTo(ticketId)).toBe(volunteerA);
+    expect(await followUpCount(ticketId)).toBe(followUpsBefore);
+    expect(onTicketChanged).not.toHaveBeenCalled();
+  });
+
+  it("assignTo leaves the ticket unassigned when its follow-up fails", async () => {
+    const ticketId = await insertTicket();
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const failing = createFailingService(onTicketChanged);
+    const followUpsBefore = await followUpCount(ticketId);
+
+    await expect(
+      failing.assignTo(volunteerA, ticketId, volunteerB),
+    ).rejects.toBeInstanceOf(FollowUpInsertFailure);
+
+    expect(await assignedTo(ticketId)).toBeNull();
+    expect(await followUpCount(ticketId)).toBe(followUpsBefore);
+    expect(onTicketChanged).not.toHaveBeenCalled();
   });
 });

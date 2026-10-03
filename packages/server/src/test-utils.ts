@@ -18,7 +18,13 @@ import { existsSync } from "node:fs";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import pg from "pg";
-import { Kysely, sql, type Insertable, type Selectable } from "kysely";
+import {
+  Kysely,
+  sql,
+  InsertQueryNode,
+  type Insertable,
+  type Selectable,
+} from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
 import type {
   PlatformDatabase,
@@ -1583,4 +1589,41 @@ export async function captureTicketChangeNotices(): Promise<TicketChangeNoticeCa
     errors,
     close: async () => client.end(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Failing follow-up inserts
+// ---------------------------------------------------------------------------
+
+/** Thrown by a database from withFailingFollowUpInserts on a follow-up insert. */
+export class FollowUpInsertFailure extends Error {
+  constructor() {
+    super("follow-up insert refused by the test database");
+    this.name = "FollowUpInsertFailure";
+  }
+}
+
+/**
+ * The given database with a plugin that throws FollowUpInsertFailure while
+ * compiling any insert into followups. Transactions opened on it carry the
+ * plugin too, so a service built on it fails at its follow-up write and the
+ * test can check what the failure rolled back.
+ */
+export function withFailingFollowUpInserts(
+  db: Kysely<TenantDatabase>,
+): Kysely<TenantDatabase> {
+  return db.withPlugin({
+    transformQuery(args) {
+      if (
+        InsertQueryNode.is(args.node) &&
+        args.node.into?.table.identifier.name === "followups"
+      ) {
+        throw new FollowUpInsertFailure();
+      }
+      return args.node;
+    },
+    transformResult(args) {
+      return Promise.resolve(args.result);
+    },
+  });
 }
