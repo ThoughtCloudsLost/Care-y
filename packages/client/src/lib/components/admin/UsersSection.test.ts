@@ -1002,6 +1002,56 @@ describe("UsersSection", () => {
         screen.getByRole("button", { name: "u-3", pressed: false }),
       ).toBeTruthy();
     });
+
+    it("keeps the bulk dialog title on the confirmed count while the run removes accounts from the selection", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2"), makeUser("u-3")];
+      const { dialog } = await openBatchDialog(["u-1", "u-2", "u-3"]);
+      expect(within(dialog).getByText("Deactivate 3 accounts?")).toBeTruthy();
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("3 deactivated");
+      });
+      const closedTitles = screen
+        .getAllByTestId("stub-dialog-closed")
+        .map((el) => el.getAttribute("data-title"));
+      expect(closedTitles).toContain("Deactivate 3 accounts?");
+    });
+
+    it("ignores the exit control and card toggles while a bulk deactivation runs", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2"), makeUser("u-3")];
+      mockSetUserActive.mockReturnValueOnce(
+        new Promise<never>(() => undefined),
+      );
+      const { dialog, component } = await openBatchDialog(["u-1", "u-2"]);
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+      await waitFor(() => {
+        expect(mockSetUserActive).toHaveBeenCalledTimes(1);
+      });
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: "Exit select" }),
+      );
+      await fireEvent.click(screen.getByRole("button", { name: "u-2" }));
+      await fireEvent.click(screen.getByRole("button", { name: "u-3" }));
+
+      expect(component.isMultiSelectActive()).toBe(true);
+      expect(
+        screen.getByRole("button", { name: "u-1", pressed: true }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "u-2", pressed: true }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "u-3", pressed: false }),
+      ).toBeTruthy();
+    });
   });
 
   describe("exported stat functions", () => {

@@ -561,6 +561,7 @@
   }
 
   function toggleSelection(userId: string): void {
+    if (batchPending) return;
     if (selectedIds.has(userId)) {
       selectedIds.delete(userId);
     } else {
@@ -573,12 +574,19 @@
     selectedIds.clear();
   }
 
+  function exitMultiSelectFromBar(): void {
+    if (batchPending) return;
+    exitMultiSelect();
+  }
+
   // ── Bulk deactivation ──
   let batchDialogOpened = $state(false);
   let batchPending = $state(false);
+  let batchCount = $state(0);
 
   function openBatchDeactivateDialog(): void {
     if (selectedIds.size === 0 || batchPending) return;
+    batchCount = selectedIds.size;
     batchDialogOpened = true;
   }
 
@@ -594,17 +602,23 @@
 
     // A refusal does not stop the run. The refused account stays selected so
     // the admin can open it, where the single-account flow names the reason.
-    for (const uid of ids) {
-      try {
-        await authRouter.setUserActive.mutate({ userId: uid, isActive: false });
-        selectedIds.delete(uid);
-        succeeded++;
-      } catch {
-        refused++;
+    try {
+      for (const uid of ids) {
+        try {
+          await authRouter.setUserActive.mutate({
+            userId: uid,
+            isActive: false,
+          });
+          selectedIds.delete(uid);
+          succeeded++;
+        } catch {
+          refused++;
+        }
       }
+    } finally {
+      batchPending = false;
     }
 
-    batchPending = false;
     void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
 
     if (refused === 0) {
@@ -625,7 +639,7 @@
   <BulkActionBar
     countLabel={m.admin_users_selected({ count: selectedIds.size })}
     exitLabel={m.admin_users_exit_multiselect()}
-    onexit={exitMultiSelect}
+    onexit={exitMultiSelectFromBar}
     ariaLabel={m.admin_users_selected({ count: selectedIds.size })}
   >
     {#snippet actions()}
@@ -866,9 +880,9 @@
 <ShellDialog
   opened={batchDialogOpened}
   ondismiss={() => (batchDialogOpened = false)}
-  title={selectedIds.size === 1
+  title={batchCount === 1
     ? m.admin_batch_deactivate_title_one()
-    : m.admin_batch_deactivate_title_other({ count: selectedIds.size })}
+    : m.admin_batch_deactivate_title_other({ count: batchCount })}
 >
   {#snippet content()}
     <p class="text-sm text-[--muted]">
