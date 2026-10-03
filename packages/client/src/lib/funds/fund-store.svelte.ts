@@ -126,6 +126,8 @@ export interface FundView {
   readonly sortOrder: number;
   /** The Org Key generation the row is sealed under. */
   readonly orgKeyGeneration: number;
+  /** ISO timestamp of the fund's creation; surfaces show the day only. */
+  readonly createdAt: string;
   /** Null while the sealed balance decrypts, or when it is unreadable. */
   readonly balance: SealedBalance | null;
   /** What the linked provider fund raised, or why there is no figure. */
@@ -601,6 +603,7 @@ function openFunds(
       isActive: row.isActive,
       sortOrder: row.sortOrder,
       orgKeyGeneration: row.orgKeyGeneration,
+      createdAt: row.createdAt,
       balance,
     });
   }

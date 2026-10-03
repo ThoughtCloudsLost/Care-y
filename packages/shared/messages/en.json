@@ -2685,6 +2685,7 @@
   "admin_funds_updated": "Fund updated",
   "admin_funds_deactivated": "Fund deactivated",
   "admin_funds_reactivated": "Fund reactivated",
+  "admin_funds_created_on": "Created {date}",
   "admin_funds_record_adjustment": "Record adjustment",
   "admin_funds_adjustment_hint": "Add money collected outside the app, such as a website donation, or take money out to correct a balance.",
   "admin_funds_adjustment_direction": "Direction",

@@ -10,6 +10,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { formatAmount } from "$lib/funds/fund-display.js";
+import { formatShortDate } from "$lib/utils/time.js";
 import type { LedgerTotals } from "$lib/funds/balances.js";
 import type {
   FundAvailable,
@@ -54,6 +55,7 @@ describe("FundBalanceCard", () => {
         available: amount(47_500),
         totals,
         raised: UNLINKED,
+        createdAt: null,
       },
     });
     const text = container.textContent;
@@ -74,6 +76,7 @@ describe("FundBalanceCard", () => {
         available: amount(57_500),
         totals: { ...totals, raised: 10_000, available: 57_500 },
         raised: { kind: "amount", minor: 10_000 },
+        createdAt: null,
       },
     });
     const text = container.textContent;
@@ -92,6 +95,7 @@ describe("FundBalanceCard", () => {
         available: { kind: "unavailable" },
         totals,
         raised: { kind: "unavailable" },
+        createdAt: null,
       },
     });
     const text = container.textContent;
@@ -118,6 +122,7 @@ describe("FundBalanceCard", () => {
         available: amount(-2_500),
         totals: null,
         raised: UNLINKED,
+        createdAt: null,
       },
     });
     const text = container.textContent;
@@ -134,6 +139,7 @@ describe("FundBalanceCard", () => {
         available: amount(1_000),
         totals: null,
         raised: UNLINKED,
+        createdAt: null,
       },
     });
 
@@ -148,9 +154,47 @@ describe("FundBalanceCard", () => {
         available: amount(1_000),
         totals,
         raised: UNLINKED,
+        createdAt: null,
       },
     });
 
     expect(getByRole("group", { name: "Transit" })).toBeTruthy();
+  });
+
+  it("says the day the fund was created", () => {
+    const { container } = render(FundBalanceCard, {
+      props: {
+        name: "Groceries",
+        currency: "USD",
+        available: amount(47_500),
+        totals,
+        raised: UNLINKED,
+        createdAt: "2026-09-01T12:00:00.000Z",
+      },
+    });
+
+    expect(container.textContent).toContain(
+      m.admin_funds_created_on({
+        date: formatShortDate("2026-09-01T12:00:00.000Z"),
+      }),
+    );
+    expect(container.querySelector("time")?.getAttribute("datetime")).toBe(
+      "2026-09-01T12:00:00.000Z",
+    );
+  });
+
+  it("leaves the creation line out while the fund loads", () => {
+    const { container } = render(FundBalanceCard, {
+      props: {
+        name: null,
+        currency: "",
+        available: { kind: "pending" },
+        totals: null,
+        raised: UNLINKED,
+        createdAt: null,
+      },
+    });
+
+    expect(container.querySelector("time")).toBeNull();
   });
 });

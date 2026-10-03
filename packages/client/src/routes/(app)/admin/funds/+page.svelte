@@ -138,6 +138,7 @@
           available={{ kind: "pending" }}
           totals={null}
           raised={{ kind: "unlinked" }}
+          createdAt={null}
         />
       </div>
     {:else if fundStore.activeFunds.length === 0 && !fundStore.decrypting}
@@ -157,6 +158,7 @@
             available={fund.available}
             totals={ledgerComplete ? ledger.totals(fund.id) : null}
             raised={fund.raised}
+            createdAt={fund.createdAt}
           />
           {#if mismatchSum !== null}
             <Register kind="careful" role="status">
