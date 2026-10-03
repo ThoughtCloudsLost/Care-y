@@ -173,7 +173,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // Clear filter.
     await page.getByText("Clear all").click();
-    await expect(page.getByText("Help with housing")).toBeVisible();
+    // The title can also sit in an open detail pane at desktop widths.
+    await expect(page.getByText("Help with housing").first()).toBeVisible();
   });
 
   // ── 3b. Inline search over decrypted titles ─────────────────────
@@ -411,7 +412,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // Clear filter.
     await page.getByText("Clear all").click();
-    await expect(page.getByText("Help with housing")).toBeVisible();
+    // The title can also sit in an open detail pane at desktop widths.
+    await expect(page.getByText("Help with housing").first()).toBeVisible();
   });
 
   // ── 9. Accessibility ────────────────────────────────────────────

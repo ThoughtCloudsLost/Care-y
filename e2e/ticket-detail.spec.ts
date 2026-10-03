@@ -190,7 +190,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // Unverified From line (rendered via ticket_email_inbound_from_label).
     const fromLine = bubble.locator('[data-testid="email-inbound-from"]');
     await expect(fromLine).toBeVisible();
-    await expect(fromLine).toContainText("client@example.org");
+    await expect(fromLine).toContainText("maria.l@example.org");
     await expect(fromLine).toContainText("unverified");
 
     // Caution affordance trigger button is visible.
