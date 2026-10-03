@@ -4,7 +4,7 @@ import { invalidateKbArticles } from "./invalidate-kb-articles.ts";
 import { kbKeys } from "./keys.ts";
 
 describe("invalidateKbArticles", () => {
-  it("invalidates the article lists and categories, nothing else", () => {
+  it("invalidates the article lists, categories and authors, nothing else", () => {
     const queryClient = new QueryClient();
     const spy = vi.spyOn(queryClient, "invalidateQueries");
 
@@ -12,6 +12,7 @@ describe("invalidateKbArticles", () => {
 
     expect(spy).toHaveBeenCalledWith({ queryKey: kbKeys.items() });
     expect(spy).toHaveBeenCalledWith({ queryKey: kbKeys.categories() });
-    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenCalledWith({ queryKey: kbKeys.authors() });
+    expect(spy).toHaveBeenCalledTimes(3);
   });
 });
