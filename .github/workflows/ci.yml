@@ -248,9 +248,11 @@ jobs:
       # on the pull request and never blocks a merge; it writes the
       # "Coverage thresholds met" line when it finishes, 30 to 45 minutes
       # later, merged or not. Skipped for drafts, for dependabot (read-only
-      # token), for forks, and when nothing outside packages/demo changed
-      # under packages/. continue-on-error keeps a dispatch hiccup from
-      # turning a green gate red.
+      # token), for forks, and when the change touched neither packages/
+      # (outside packages/demo) nor the Playwright suite itself (e2e/ and
+      # its config), since a spec change is exactly what that run proves.
+      # continue-on-error keeps a dispatch hiccup from turning a green gate
+      # red.
       - name: Dispatch the coverage-full run
         if: >-
           github.event_name == 'pull_request'
@@ -264,8 +266,9 @@ jobs:
           BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           changed="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')"
-          if ! printf '%s\n' "$changed" | grep -qE '^packages/' || ! printf '%s\n' "$changed" | grep -E '^packages/' | grep -qvE '^packages/demo/'; then
-            echo "no code change outside packages/demo, no coverage run"
+          relevant="$(printf '%s\n' "$changed" | grep -E '^(packages/|e2e/|playwright\.config\.ts$)' | grep -vE '^packages/demo/' || true)"
+          if [ -z "$relevant" ]; then
+            echo "no change under packages/ (outside demo), e2e/ or the Playwright config, no coverage run"
             exit 0
           fi
           gh workflow run e2e.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" -f mode=coverage-full
