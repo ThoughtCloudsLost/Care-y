@@ -3215,6 +3215,7 @@
   "account_intake_confirm_reminder": "Tu nombre de usuario es {username}. Inicia sesión en cualquier momento en /account en este sitio. Tu contraseña nunca se muestra ni se envía a ningún lado.",
   "account_idle_warning": "Tu sesión terminará pronto por inactividad. Cualquier actividad la mantiene activa.",
   "account_signed_out": "Se cerró tu sesión para proteger tus mensajes. Inicia sesión para continuar.",
+  "account_signed_out_voluntary": "Has cerrado sesión. Inicia sesión para continuar.",
   "account_new_password": "Nueva contraseña",
   "account_confirm_new_password": "Confirmar nueva contraseña",
   "account_upgrade_setup": "Crear cuenta",

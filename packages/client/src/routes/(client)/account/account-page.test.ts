@@ -22,6 +22,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { TRPCClientError } from "@trpc/client";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as PortalContext from "$lib/portal/context.js";
 import type * as TanstackQuery from "@tanstack/svelte-query";
@@ -410,6 +411,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   account_title: () => "Account",
   account_login_failed: () => "Login failed",
   account_signed_out: () => "Signed out",
+  account_signed_out_voluntary: () => "Signed out voluntary",
+  auth_signout_unconfirmed: () => "Sign-out unconfirmed",
   account_idle_warning: () => "Idle warning",
   account_unlocking: () => "Unlocking...",
   account_change_success: () => "Password changed",
@@ -546,6 +549,56 @@ const { PortalBridge } = await import("$lib/workers/portal-bridge.js");
  */
 function installBridgeFactory(): void {
   mockPortalBridgeFactory.mockImplementation(() => new PortalBridge());
+}
+
+/**
+ * Sign in through the login form and wait until the drawer publishes the
+ * logout action. Returns the session's worker.
+ */
+async function signIn(): Promise<MockWorkerInstance> {
+  const form = renderLoginForm();
+  const inputs = form.querySelectorAll("input");
+  const usernameInput = inputs[0];
+  const passwordInput = inputs[1];
+
+  if (usernameInput && passwordInput) {
+    await fireEvent.input(usernameInput, {
+      target: { value: "testuser" },
+    });
+    await fireEvent.input(passwordInput, {
+      target: { value: "a-secure-password-here" },
+    });
+  }
+
+  await fireEvent.submit(form);
+
+  await vi.waitFor(() => {
+    expect(mockWorkerInstances).toHaveLength(1);
+  });
+
+  const worker = mockWorkerInstances[0]!;
+  autoRespondWorker(worker);
+
+  await vi.waitFor(() => {
+    expect(capturedShellState?.actions.some((a) => a.id === "logout")).toBe(
+      true,
+    );
+  });
+
+  return worker;
+}
+
+/** Invoke the drawer's logout action. */
+function clickLogout(): void {
+  const action = capturedShellState?.actions.find((a) => a.id === "logout");
+  if (action === undefined) throw new Error("logout action not published");
+  action.onclick();
+}
+
+/** The signed-out note's text, or null when no note is rendered. */
+function signedOutNoteText(): string | null {
+  const note = document.querySelector('[data-testid="signed-out-note"]');
+  return note?.textContent.trim() ?? null;
 }
 
 // -- Tests --------------------------------------------------------------------
@@ -688,6 +741,82 @@ describe("account page", () => {
 
         // Must not throw even when sendBeacon is unavailable
         expect(() => capturedShellState?.onrevoke?.()).not.toThrow();
+      });
+    });
+  });
+
+  describe("sign out", () => {
+    it("wipes key material before the revoke request is sent", async () => {
+      const order: string[] = [];
+      const worker = await signIn();
+
+      const priorPostMessage = worker.postMessage;
+      worker.postMessage = vi.fn(
+        (
+          msg: Record<string, unknown>,
+          options?: StructuredSerializeOptions,
+        ) => {
+          if (msg.type === "zeroAll") order.push("zeroAll");
+          priorPostMessage(msg, options);
+        },
+      );
+
+      // Never settles, simulating a hanging network
+      mockAccountLogout.mockImplementationOnce(() => {
+        order.push("revoke");
+        return new Promise(() => undefined);
+      });
+
+      clickLogout();
+
+      await vi.waitFor(() => {
+        expect(order).toContain("revoke");
+      });
+      expect(order).toEqual(["zeroAll", "revoke"]);
+
+      // Back on the login form while the revoke is still pending
+      expect(document.querySelector("form")).not.toBeNull();
+      expect(signedOutNoteText()).toBeNull();
+    });
+
+    it("confirms a voluntary sign-out once the server revokes the session", async () => {
+      await signIn();
+      mockAccountLogout.mockResolvedValueOnce({});
+
+      clickLogout();
+
+      await vi.waitFor(() => {
+        expect(signedOutNoteText()).toBe("Signed out voluntary");
+      });
+    });
+
+    it("treats an UNAUTHORIZED answer as confirmed", async () => {
+      await signIn();
+      mockAccountLogout.mockRejectedValueOnce(
+        TRPCClientError.from({
+          error: {
+            message: "Not authenticated",
+            code: -32001,
+            data: { code: "UNAUTHORIZED" },
+          },
+        }),
+      );
+
+      clickLogout();
+
+      await vi.waitFor(() => {
+        expect(signedOutNoteText()).toBe("Signed out voluntary");
+      });
+    });
+
+    it("says the server did not confirm when the revoke fails", async () => {
+      await signIn();
+      mockAccountLogout.mockRejectedValueOnce(new Error("Network error"));
+
+      clickLogout();
+
+      await vi.waitFor(() => {
+        expect(signedOutNoteText()).toBe("Sign-out unconfirmed");
       });
     });
   });

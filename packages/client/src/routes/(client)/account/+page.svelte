@@ -39,7 +39,11 @@
     serializeContactCorrection,
     type ContactCorrectionPayload,
   } from "@care-y/shared";
-  import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
+  import {
+    requireRouter,
+    PortalUnavailableError,
+    isUnauthorizedTrpcError,
+  } from "$lib/errors.js";
   import {
     isPortalChannelDisabledError,
     splitContactEnvelope,
@@ -683,11 +687,20 @@
   // Logout handler
   // ---------------------------------------------------------------------------
 
-  function handleLogout(): void {
+  async function handleLogout(): Promise<void> {
+    // Keys leave memory before the network call: revoking needs only the
+    // session cookie, and a slow or hanging request must not keep them.
+    returnToLogin();
     const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
-    void portalRouter.accountLogout.mutate().finally(() => {
-      returnToLogin(m.account_signed_out());
-    });
+    try {
+      await portalRouter.accountLogout.mutate();
+      signedOutMessage = m.account_signed_out_voluntary();
+    } catch (err: unknown) {
+      // UNAUTHORIZED means the server holds no session to end
+      signedOutMessage = isUnauthorizedTrpcError(err)
+        ? m.account_signed_out_voluntary()
+        : m.auth_signout_unconfirmed();
+    }
   }
 
   /**
@@ -798,7 +811,7 @@
         label: m.account_logout(),
         icon: LogOut,
         destructive: true,
-        onclick: handleLogout,
+        onclick: () => void handleLogout(),
       },
     ];
   });
