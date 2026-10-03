@@ -29,6 +29,7 @@ import {
 } from "@playwright/test";
 import { CRYPTO_TIMEOUT, E2eError, createTicket, login } from "./helpers";
 import { LOCKED_TICKET_TITLE } from "./replay-tickets";
+import { writeFileSync } from "node:fs";
 
 /**
  * Budget for the dev seed replay. It is a guess sized well above the
@@ -373,4 +374,10 @@ setup("seed crypto-dependent data", async ({ browser, page }) => {
 
   // 4. A ticket the admin can see but cannot open.
   await createLockedTicket(browser, page);
+
+  // 5. Mark the end of seeding. resetCommunicationTiers (db-probe.ts)
+  // only undoes rows created after this moment, so the seed's own
+  // channels and accounts survive the portal specs' resets. Literal
+  // path, for the lint's filesystem rule; db-probe.ts reads the same one.
+  writeFileSync("/tmp/care-y-e2e-org-seed-stamp", new Date().toISOString());
 });

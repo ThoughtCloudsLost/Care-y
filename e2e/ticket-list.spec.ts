@@ -377,6 +377,15 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
+
+    // At desktop widths close the pane, so the later tests in this group
+    // see one card title on the page rather than the card and the pane.
+    if (await isDesktopLayout(page)) {
+      await page.keyboard.press("Escape");
+      await expect(page.locator('[role="log"]')).not.toBeVisible({
+        timeout: 5_000,
+      });
+    }
   });
 
   // ── 8. Empty state ──────────────────────────────────────────────

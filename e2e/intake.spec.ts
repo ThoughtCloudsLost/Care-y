@@ -697,16 +697,18 @@ test.describe.serial("Intake validation matrix", () => {
     );
     await page.getByTestId("intake-page-next").click();
 
-    // Submit with the last page empty: its required textarea blocks.
-    await page.getByTestId("intake-submit").click();
+    // The last page hard-blocks Send while any page still has an issue,
+    // and the issue summary names the empty required textarea. Filling it
+    // clears the issue and enables Send.
+    const submit = page.getByTestId("intake-submit");
+    await expect(submit).toBeDisabled({ timeout: 5_000 });
     await expect(
-      page.getByText("Please write a message so we know how to help.", {
-        exact: true,
-      }),
+      page.getByText(/Please write a message so we know how to help\./).first(),
     ).toBeVisible({ timeout: 5_000 });
 
     await page.getByLabel(LABELS.details).fill("Nothing further");
-    await page.getByTestId("intake-submit").click();
+    await expect(submit).toBeEnabled({ timeout: 5_000 });
+    await submit.click();
 
     // Success renders the reference code, same contract as the routing
     // tests above.
