@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * ArticleDetailView query error states.
+ * ArticleDetailView query error states and author line.
  *
  * vi.mock() is required for:
  *   - @tanstack/svelte-query: controlled query state
@@ -22,6 +22,14 @@ import type * as WithTermsNS from "$lib/terminology/with-terms.js";
 import { getMockPermissions } from "$mocks/permissions.js";
 
 let articleQueryState: Record<string, unknown> = {};
+let authorsQueryState: Record<string, unknown> = {};
+let lastAuthorsEnabled: unknown;
+let cachedNames = new Map<string, string>();
+let failedIds = new Set<string>();
+let decryptResults = new Map<string, string>();
+const decryptSpy = vi.fn((id: string, data: string | null): string | null =>
+  data === null ? null : (decryptResults.get(id) ?? null),
+);
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   return {
@@ -35,6 +43,10 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
       }
       if (key[1] === "vote") {
         return { isLoading: false, isError: false, error: null, data: null };
+      }
+      if (key[1] === "authors") {
+        lastAuthorsEnabled = opts.enabled;
+        return authorsQueryState;
       }
       return { isLoading: false, isError: false, error: null, data: undefined };
     },
@@ -55,6 +67,7 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     kb: {
       getItem: { query: vi.fn() },
       listCategories: { query: vi.fn() },
+      listAuthors: { query: vi.fn() },
       listAttachments: { query: vi.fn() },
       getUserVote: { query: vi.fn() },
       castVote: { mutate: vi.fn() },
@@ -66,8 +79,10 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoContextModule>()),
   getOrgDecryptCache: () => ({
-    decrypt: vi.fn().mockReturnValue(null),
-    isFailed: vi.fn().mockReturnValue(false),
+    decrypt: decryptSpy,
+    get: (id: string) => cachedNames.get(id),
+    has: (id: string) => cachedNames.has(id) || failedIds.has(id),
+    isFailed: (id: string) => failedIds.has(id),
   }),
   getOrgKeyManager: () => ({ isLoaded: false, decrypt: vi.fn() }),
   getCurrentPermissions: () => getMockPermissions,
@@ -132,6 +147,17 @@ beforeEach(() => {
     data: baseArticle,
     refetch: vi.fn().mockResolvedValue(undefined),
   };
+  authorsQueryState = {
+    isLoading: true,
+    isError: false,
+    error: null,
+    data: undefined,
+  };
+  lastAuthorsEnabled = undefined;
+  cachedNames = new Map();
+  failedIds = new Set();
+  decryptResults = new Map();
+  decryptSpy.mockClear();
 });
 
 afterEach(cleanup);
@@ -213,5 +239,76 @@ describe("ArticleDetailView query errors", () => {
     expect(container.querySelector(".article-detail")).not.toBeNull();
     expect(screen.queryByText("This article could not be loaded.")).toBeNull();
     expect(screen.queryByText("Article not found.")).toBeNull();
+  });
+});
+
+describe("ArticleDetailView author line", () => {
+  it("shows the cached author name without asking for the author list", () => {
+    cachedNames.set("volunteer:user-001", "Ada");
+    renderView();
+
+    expect(screen.getByText("By Ada")).toBeTruthy();
+    expect(lastAuthorsEnabled).toBe(false);
+  });
+
+  it("fills the name from the author list when it is not cached", () => {
+    authorsQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [{ id: "user-001", encryptedDisplayName: "enc-name" }],
+    };
+    decryptResults.set("volunteer:user-001", "Ada");
+    renderView();
+
+    expect(lastAuthorsEnabled).toBe(true);
+    expect(decryptSpy).toHaveBeenCalledWith("volunteer:user-001", "enc-name", {
+      table: "users",
+      id: "user-001",
+    });
+    expect(screen.getByText("By Ada")).toBeTruthy();
+  });
+
+  it("shows a skeleton while the author list is loading", () => {
+    const { container } = renderView();
+
+    expect(
+      container.querySelector(".article-meta [data-skeleton]"),
+    ).not.toBeNull();
+    expect(screen.queryByText("Author unknown")).toBeNull();
+  });
+
+  it("says the author is unknown when the author is not in the list", () => {
+    authorsQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [{ id: "user-999", encryptedDisplayName: "enc-other" }],
+    };
+    renderView();
+
+    expect(screen.getByText("Author unknown")).toBeTruthy();
+  });
+
+  it("says the author is unknown when the author list fails to load", () => {
+    authorsQueryState = {
+      isLoading: false,
+      isError: true,
+      error: new Error("Network failure"),
+      data: undefined,
+    };
+    renderView();
+
+    expect(screen.getByText("Author unknown")).toBeTruthy();
+  });
+
+  it("shows the decrypt error when the author name cannot be unlocked", () => {
+    failedIds.add("volunteer:user-001");
+    const { container } = renderView();
+
+    expect(
+      container.querySelector(".article-meta .decrypt-error")?.textContent,
+    ).toBe("Could not unlock this content.");
+    expect(screen.queryByText("Author unknown")).toBeNull();
   });
 });

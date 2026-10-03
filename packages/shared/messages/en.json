@@ -10,6 +10,7 @@
   "library_no_categories": "No categories yet",
   "library_no_articles": "No articles in this category",
   "library_article_by": "By {author}",
+  "library_article_author_unknown": "Author unknown",
   "library_article_updated": "Updated {time}",
   "library_vote_up": "Helpful",
   "library_vote_down": "Not helpful",

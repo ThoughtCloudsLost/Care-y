@@ -7,6 +7,8 @@
   Fetches article via trpc.kb.getItem, decrypts title and body,
   renders body through renderArticleBody() (DOMPurify-sanitized),
   and manages vote state with optimistic updates.
+  Resolves the author name from the org decrypt cache and, when the name
+  is not cached, from kb.listAuthors (the query the library list uses).
   Renders QueryError when the article query fails: a deleted article
   offers the way back to the library, any other failure offers retry.
 -->
@@ -175,15 +177,43 @@
   });
 
   // ── Author name ──
+  // The library list fills `volunteer:<id>` from kb.listAuthors. When this
+  // view opens before the list has run, the same query fills it here.
 
-  const authorName = $derived(
-    createdBy !== null
-      ? orgCache.decrypt(`volunteer:${createdBy}`, null, {
-          table: "users",
-          id: createdBy,
-        })
-      : null,
+  type AuthorState =
+    | { readonly status: "pending" }
+    | { readonly status: "ready"; readonly name: string }
+    | { readonly status: "unknown" }
+    | { readonly status: "failed" };
+
+  const authorCacheKey = $derived(
+    createdBy !== null ? `volunteer:${createdBy}` : null,
   );
+
+  const authorsQuery = createQuery(() => ({
+    queryKey: kbKeys.authors(),
+    queryFn: async () => kbRouter.listAuthors.query(),
+    staleTime: 10 * 60 * 1000,
+    enabled: authorCacheKey !== null && !orgCache.has(authorCacheKey),
+  }));
+
+  const author = $derived.by((): AuthorState => {
+    if (createdBy === null || authorCacheKey === null) {
+      return { status: "pending" };
+    }
+    if (orgCache.isFailed(authorCacheKey)) return { status: "failed" };
+    const cached = orgCache.get(authorCacheKey);
+    if (cached !== undefined) return { status: "ready", name: cached };
+    if (authorsQuery.isError) return { status: "unknown" };
+    if (authorsQuery.data === undefined) return { status: "pending" };
+    const record = authorsQuery.data.find((a) => a.id === createdBy);
+    if (record === undefined) return { status: "unknown" };
+    const name = orgCache.decrypt(authorCacheKey, record.encryptedDisplayName, {
+      table: "users",
+      id: createdBy,
+    });
+    return name !== null ? { status: "ready", name } : { status: "pending" };
+  });
 
   // ── Metadata ──
 
@@ -499,9 +529,13 @@
       role="group"
       aria-label={m.library_article_info()}
     >
-      {#if authorName !== null}
-        <span>{m.library_article_by({ author: authorName })}</span>
-      {:else if createdBy === null}
+      {#if author.status === "ready"}
+        <span>{m.library_article_by({ author: author.name })}</span>
+      {:else if author.status === "unknown"}
+        <span>{m.library_article_author_unknown()}</span>
+      {:else if author.status === "failed"}
+        <DecryptPlaceholder result={{ status: "error" }} length={8} />
+      {:else}
         <InlineSkeleton width="8ch" />
       {/if}
       {#if relativeTime !== null}
