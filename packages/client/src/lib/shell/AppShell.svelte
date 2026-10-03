@@ -27,8 +27,9 @@
   - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 
   A language switch updates uiLocale and the keyed block remounts the shell
-  in the new language without a page reload. The save-language offer sits
-  outside the keyed block so it survives the remount.
+  in the new language without a page reload. The save-language offer
+  remounts with it, because ShellDialog portals into the keyed .k-page; its
+  open state lives in this script, so the offer survives the remount.
 -->
 <script lang="ts">
   import {
@@ -1472,27 +1473,27 @@
       {/snippet}
     </PageShell>
   </div>
-{/key}
 
-<ShellDialog
-  opened={localeOfferOpen}
-  ondismiss={declineLocaleOffer}
-  title={m.settings_persist_language_title()}
->
-  {#snippet content()}
-    <p class="text-sm text-[--muted]">
-      {m.settings_persist_language_body()}
-    </p>
-  {/snippet}
-  {#snippet buttons()}
-    <DialogButton onclick={declineLocaleOffer}>
-      {m.settings_persist_language_decline()}
-    </DialogButton>
-    <DialogButton strong onclick={acceptLocaleOffer}>
-      {m.settings_persist_language_accept()}
-    </DialogButton>
-  {/snippet}
-</ShellDialog>
+  <ShellDialog
+    opened={localeOfferOpen}
+    ondismiss={declineLocaleOffer}
+    title={m.settings_persist_language_title()}
+  >
+    {#snippet content()}
+      <p class="text-sm text-[--muted]">
+        {m.settings_persist_language_body()}
+      </p>
+    {/snippet}
+    {#snippet buttons()}
+      <DialogButton onclick={declineLocaleOffer}>
+        {m.settings_persist_language_decline()}
+      </DialogButton>
+      <DialogButton strong onclick={acceptLocaleOffer}>
+        {m.settings_persist_language_accept()}
+      </DialogButton>
+    {/snippet}
+  </ShellDialog>
+{/key}
 
 <style>
   /* ── Desktop layout ── */
