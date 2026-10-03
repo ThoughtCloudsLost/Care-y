@@ -55,9 +55,11 @@
 
 {#if fullSearchAvailable}
   <div class="full-search-panel">
-    {#if isSearching}
+    {#if isSearching || anyIncomplete}
       <div class="progress-area">
-        <p class="progress-title">{m.search_full_progress_title()}</p>
+        {#if isSearching}
+          <p class="progress-title">{m.search_full_progress_title()}</p>
+        {/if}
         {#each states.filter((s) => s.status !== "idle") as providerState (providerState.providerId)}
           <div class="progress-row">
             <span class="progress-label">{providerState.label}</span>
@@ -66,10 +68,11 @@
             {:else if providerState.status === "incomplete"}
               <span class="progress-done">{m.search_full_stopped()}</span>
             {:else}
-              <Progressbar
-                progress={providerState.searched /
-                  Math.max(providerState.total, 1)}
-              />
+              {#if providerState.total > 0}
+                <Progressbar
+                  progress={providerState.searched / providerState.total}
+                />
+              {/if}
               <span class="progress-count">
                 {m.search_full_progress({
                   searched: providerState.searched,
@@ -80,7 +83,8 @@
           </div>
         {/each}
       </div>
-    {:else if isDone}
+    {/if}
+    {#if isDone}
       <div class="done-area">
         <p class="done-text">
           {m.search_full_summary({
@@ -89,7 +93,7 @@
           })}
         </p>
       </div>
-    {:else}
+    {:else if !isSearching}
       <button type="button" class="panel-trigger num" onclick={handleTrigger}>
         {m.search_panel_trigger()}
       </button>

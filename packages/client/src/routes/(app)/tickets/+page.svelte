@@ -548,7 +548,11 @@
     fetchNextPage: async () => ticketsQuery.fetchNextPage(),
     isInitialLoading: () => ticketsQuery.isLoading,
     loadedCount: () => allTickets.length,
-    totalCount: () => countsQuery.data?.total,
+    // The counts query totals the whole org while a filtered run pages a
+    // narrower list, so under a filter the total is withheld and the stopped
+    // line reports the loaded count.
+    totalCount: () =>
+      filterStore.activeCount === 0 ? countsQuery.data?.total : undefined,
     matchCount: () => titleMatchIds.length,
   });
 

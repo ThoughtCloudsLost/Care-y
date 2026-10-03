@@ -798,6 +798,24 @@ describe("createDeepSearch", () => {
       expect(h.ds.total).toBe(20);
     });
 
+    it("reports the loaded count when the page withholds the total under a filter", async () => {
+      registerFullSearchProvider();
+      const h = createHarness({
+        hasNext: true,
+        failFetchResult: true,
+        loaded: 20,
+        totalCount: undefined,
+      });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+
+      expect(h.ds.status).toBe("incomplete");
+      expect(h.ds.searched).toBe(20);
+      expect(h.ds.total).toBe(20);
+    });
+
     it("moves to incomplete with the provider's last progress when its run rejects in the content phase", async () => {
       const p = registerFullSearchProvider();
       const h = createHarness();
