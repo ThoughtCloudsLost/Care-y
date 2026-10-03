@@ -906,8 +906,6 @@
   function handleCallAction(action: CallAction): void {
     closeCallSheet();
     if (action === "cancel" || callInProgress) return;
-
-    exposureHint.show("call");
     void callDispatch.executeCall();
   }
 
@@ -1023,6 +1021,7 @@
   }
 
   function openCallSheet(): void {
+    exposureHint.show("call");
     callSheetOpen = true;
   }
   function closeCallSheet(): void {
