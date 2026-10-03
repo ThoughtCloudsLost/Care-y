@@ -890,7 +890,15 @@ export async function createTicket(
   // search dropdown, which opens once the search field has input.
   const clientInput = sheet.getByPlaceholder(/search by alias/i);
   await clientInput.click();
+  // The dropdown re-renders when the search answers; let it settle before
+  // reaching for the action at its foot, so the click lands on the
+  // rendered button and not on content that is being replaced.
+  const searchSettled = page.waitForResponse(
+    (r) => r.url().includes("tickets.searchClients"),
+    { timeout: CRYPTO_TIMEOUT },
+  );
   await clientInput.pressSequentially("new", { delay: 30 });
+  await searchSettled;
   const createClientBtn = sheet.getByRole("button", { name: /^create new/i });
   await createClientBtn.waitFor({ state: "visible", timeout: 10_000 });
   await createClientBtn.click();
@@ -906,10 +914,14 @@ export async function createTicket(
       r.request().method() === "POST",
     { timeout: CRYPTO_TIMEOUT },
   );
-  await phoneInput.fill(nextCallerPhone());
+  const callerPhone = nextCallerPhone();
+  await phoneInput.fill(callerPhone);
+  await expect(phoneInput).toHaveValue(callerPhone);
+  // Blur the phone field on purpose rather than as a side effect of the
+  // next fill, so the lookup starts whatever the sheet does with focus.
+  await phoneInput.press("Tab");
 
-  // Fill the rest of the form. Clicking the title field also blurs the
-  // phone field, which starts the lookup.
+  // Fill the rest of the form.
   await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
   const lookup = await lookupResponse;
   if (lookup.status() !== 200) {
