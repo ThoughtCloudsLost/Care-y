@@ -586,8 +586,13 @@
     color: var(--ink-2);
   }
 
+  /* A highlight sits on its own soft background, which lifts the surface
+     under it; on the muted ink of the meta row and of a closed title that
+     lands under 4.5:1, so the match reads in the secondary ink. */
   .r-meta :global(.search-highlight),
-  .row-meta :global(.search-highlight) {
+  .row-meta :global(.search-highlight),
+  .tc-closed .r-title :global(.search-highlight),
+  .tc-closed .row-title :global(.search-highlight) {
     color: var(--ink-2);
   }
 
