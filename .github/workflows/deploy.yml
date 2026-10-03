@@ -4,7 +4,8 @@ name: Release
 # with a passing CI run builds the images at that commit, publishes them to
 # GHCR tagged with the commit SHA and the version, creates the GitHub Release
 # with generated notes (categories in .github/release.yml), and deploys once a
-# reviewer approves the production environment. Merges to main run CI only.
+# reviewer approves the production environment, then deploys the handbook
+# (pages.yml) from the same commit. Merges to main run CI only.
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
@@ -240,3 +241,14 @@ jobs:
             echo "::error::Deploy of $GITHUB_SHA failed. Details are in the host's deploy log."
             exit 1
           fi
+
+  # The handbook follows production: same commit, only after the deploy
+  # succeeded. The called workflow brings its own pages permissions.
+  handbook:
+    name: Deploy handbook
+    needs: deploy
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
