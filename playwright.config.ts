@@ -16,7 +16,10 @@ export default defineConfig({
   timeout: 90_000,
   use: {
     baseURL: "http://localhost:5174",
-    trace: "on-first-retry",
+    // On a runner the first attempt is the one worth reading, and a retry
+    // of the seed setup cannot pass (see the seed-data project), so CI keeps
+    // the trace of any failed attempt. Locally the first retry is enough.
+    trace: process.env.CI ? "retain-on-failure" : "on-first-retry",
   },
   projects: [
     // ── Main E2E suite (e2e-org, fully seeded) ──
@@ -24,6 +27,11 @@ export default defineConfig({
       name: "seed-data",
       testMatch: "seed-data.setup.ts",
       use: { ...devices["Desktop Chrome"] },
+      // A retry re-runs the seed replay, which issues a new org key; the
+      // seed volunteer's wrap from the first attempt is then stale and the
+      // locked ticket step cannot decrypt a queue name. A retry can never
+      // pass, so it only hides the first attempt's failure and costs minutes.
+      retries: 0,
     },
     {
       name: "chromium",
