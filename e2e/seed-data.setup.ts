@@ -47,6 +47,10 @@ const E2E_ORG_NAME = "E2E Test Org";
  * the dev password (SEED_USERS in packages/client/src/lib/dev/seed-replay.ts).
  */
 const LOCKED_TICKET_VOLUNTEER = "vol.crisis";
+/** RoleId.VOLUNTEER and Permission.VIEW_CLIENT_PII in packages/shared/src/roles.ts;
+ *  the e2e project does not import the shared package. */
+const VOLUNTEER_ROLE_ID = "dXwG0zR9BtJp";
+const VIEW_CLIENT_PII = "view_client_pii";
 const VOLUNTEER_PASSWORD = "dev-password-1234!";
 /** What the volunteer's first login sets in place of the temporary password. */
 const REPLACED_VOLUNTEER_PASSWORD = "dev-password-1234!-chosen";
@@ -216,6 +220,16 @@ async function createLockedTicket(
       queueId,
       userId: adminId,
     });
+    // Creating a ticket for a caller nobody has seen runs the phone lookup
+    // relay, which takes the client PII permission. The Volunteer role
+    // does not hold it by default, so the admin grants it to the role for
+    // this one creation and takes it back below. Whether volunteers should
+    // hold it is a product question, filed separately.
+    await callTrpc(adminPage, "auth.setRolePermission", {
+      roleId: VOLUNTEER_ROLE_ID,
+      permission: VIEW_CLIENT_PII,
+      enabled: true,
+    });
     try {
       await createTicket(volPage, {
         title: LOCKED_TICKET_TITLE,
@@ -227,6 +241,11 @@ async function createLockedTicket(
       // Close before the admin rejoins. An open volunteer client could
       // backfill a wrap for the admin once the admin is a member again.
       await closeVolContext();
+      await callTrpc(adminPage, "auth.setRolePermission", {
+        roleId: VOLUNTEER_ROLE_ID,
+        permission: VIEW_CLIENT_PII,
+        enabled: false,
+      });
       await callTrpc(adminPage, "tickets.addQueueMember", {
         queueId,
         userId: adminId,
