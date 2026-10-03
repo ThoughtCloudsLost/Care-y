@@ -2,14 +2,16 @@ import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import {
+  CRYPTO_TIMEOUT,
   auditA11y,
   clickComposeAction,
-  CRYPTO_TIMEOUT,
+  createSecureLink,
   isDesktopLayout,
   login,
+  longPress,
   openComposeActions,
   openTicketByTitle,
-  longPress,
+  openTicketInfoPanel,
 } from "./helpers";
 
 test.describe.serial("Ticket Detail (Chat View)", () => {
@@ -367,7 +369,20 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 11. Preset fills compose (Checkpoint 8) ────────────────────
 
   test("compose actions popover opens preset sheet", async () => {
+    // Preset replies fill a portal reply, so the popover offers them only
+    // on a portal-capable ticket. No seed gives the story ticket a channel
+    // and the portal specs reset every client's tier, so set the link up
+    // here, the way the portal spec does for its own ticket.
+    await openTicketInfoPanel(page, "Communication");
+    await createSecureLink(page);
+    await expect(
+      page.getByRole("button", { name: /set up secure link/i }),
+    ).toHaveCount(0, { timeout: CRYPTO_TIMEOUT });
+
     const dialog = await openComposeActions(page);
+    await expect(dialog.getByText(/preset replies/i)).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     // Click "Preset replies" from the compose actions popover.
     await clickComposeAction(dialog, /preset replies/i);
