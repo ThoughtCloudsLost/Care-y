@@ -215,6 +215,7 @@
   "error_kb_category_not_found": "⟦Càtègòry nòt fòùnd. ••••••⟧",
   "error_kb_article_not_found": "⟦Àrtìclè nòt fòùnd. ••••••⟧",
   "error_kb_attachment_not_found": "⟦Àttàchmènt nòt fòùnd. •••••••⟧",
+  "error_kb_category_has_articles": "⟦Mòvè òr dèlètè àll àrtìclès ìn thìs càtègòry fìrst •••••••••••••••⟧",
   "error_telephony_not_configured": "⟦Tèlèphòny ìs nòt cònfìgùrèd fòr thìs òrgànìzàtìòn. •••••••••••••••⟧",
   "error_no_consultant_registration": "⟦Nò cònsùltànt règìstràtìòn fòùnd. ••••••••••⟧",
   "error_invalid_verification_code": "⟦Ìnvàlìd òr èxpìrèd vèrìfìcàtìòn còdè. ••••••••••••⟧",

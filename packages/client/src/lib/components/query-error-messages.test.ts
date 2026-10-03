@@ -343,6 +343,10 @@ const expectedMessages: Array<{ code: ErrorCodeType; expected: string }> = [
     code: ErrorCode.KB_ATTACHMENT_NOT_FOUND,
     expected: m.error_kb_attachment_not_found(),
   },
+  {
+    code: ErrorCode.KB_CATEGORY_HAS_ARTICLES,
+    expected: m.error_kb_category_has_articles(),
+  },
 
   // Onboarding
   {

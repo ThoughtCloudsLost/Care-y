@@ -30,3 +30,19 @@ export function isPgPermissionDenied(err: unknown): boolean {
     err.code === PG_INSUFFICIENT_PRIVILEGE
   );
 }
+
+const PG_FOREIGN_KEY_VIOLATION = "23503";
+
+/**
+ * True for SQLSTATE 23503 (foreign_key_violation): the statement would leave
+ * a row referencing one that does not exist, such as deleting a parent row
+ * that a RESTRICT foreign key still points at.
+ */
+export function isPgForeignKeyViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    err.code === PG_FOREIGN_KEY_VIOLATION
+  );
+}

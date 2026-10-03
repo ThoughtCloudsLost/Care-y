@@ -125,6 +125,7 @@ import type * as HapticNS from "$lib/utils/haptic.js";
 import type * as ToastNS from "$lib/stores/toast.svelte.js";
 import type * as ErrorsNS from "$lib/errors.js";
 import { mockToastShow } from "$mocks/toast.js";
+import { ErrorCode } from "@care-y/shared";
 import type * as TrpcNS from "$lib/trpc/index.js";
 import type * as SvelteQueryNS from "@tanstack/svelte-query";
 import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
@@ -329,9 +330,11 @@ describe("CategoryManageSheet", () => {
     expect(screen.getByText("Procedures")).toBeTruthy();
   });
 
-  it("shows delete-blocked toast when server rejects delete", async () => {
+  it("shows delete-blocked toast when server refuses delete because articles remain", async () => {
     // Server rejects even though client thinks articleCount is 0
-    mockDeleteCategory.mockRejectedValueOnce(new Error("FK violation"));
+    mockDeleteCategory.mockRejectedValueOnce(
+      new Error(ErrorCode.KB_CATEGORY_HAS_ARTICLES),
+    );
 
     render(CategoryManageSheet, {
       opened: true,
@@ -353,6 +356,31 @@ describe("CategoryManageSheet", () => {
         3000,
       );
     });
+  });
+
+  it("shows generic error toast when delete fails for another reason", async () => {
+    mockDeleteCategory.mockRejectedValueOnce(new Error("Network error"));
+
+    render(CategoryManageSheet, {
+      opened: true,
+      categories,
+      ondismiss,
+    });
+
+    // Click edit on empty category
+    const editButtons = screen.getAllByLabelText("Edit");
+    await fireEvent.click(editButtons[2]!);
+
+    // Click Delete
+    await fireEvent.click(screen.getByLabelText("Delete Category"));
+
+    await vi.waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith("Something went wrong", 3000);
+    });
+    expect(mockToastShow).not.toHaveBeenCalledWith(
+      "Move or delete all articles in this category first",
+      3000,
+    );
   });
 
   it("evicts orgCache entries on successful update", async () => {

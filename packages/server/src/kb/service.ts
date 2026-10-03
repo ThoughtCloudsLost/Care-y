@@ -20,7 +20,8 @@ import {
   type SqlBool,
 } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { NotFoundError } from "../errors.js";
+import { isPgForeignKeyViolation } from "../db/pg-errors.js";
+import { ConflictError, NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import { kbItemIdSchema } from "@care-y/shared";
 import type { KbCategoryId, KbItemId, KbVoteId, UserId } from "@care-y/shared";
@@ -342,13 +343,21 @@ export function createKBCategoryService(
     },
 
     async delete(categoryId) {
-      // RESTRICT FK will throw if items still reference this category.
-      // Let the DB error propagate; the route maps it to a ConflictError.
-      const result = await db
-        .deleteFrom("kb_categories")
-        .where("id", "=", categoryId)
-        .executeTakeFirst();
-      if (result.numDeletedRows === 0n) {
+      let numDeletedRows: bigint;
+      // kb_items.category_id is the only foreign key that references
+      // kb_categories, and its RESTRICT refuses this while articles remain.
+      try {
+        ({ numDeletedRows } = await db
+          .deleteFrom("kb_categories")
+          .where("id", "=", categoryId)
+          .executeTakeFirst());
+      } catch (err: unknown) {
+        if (isPgForeignKeyViolation(err)) {
+          throw new ConflictError(ErrorCode.KB_CATEGORY_HAS_ARTICLES);
+        }
+        throw err;
+      }
+      if (numDeletedRows === 0n) {
         throw new NotFoundError(ErrorCode.KB_CATEGORY_NOT_FOUND);
       }
     },
