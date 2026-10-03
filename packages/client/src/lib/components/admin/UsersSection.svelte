@@ -573,27 +573,51 @@
     selectedIds.clear();
   }
 
-  async function handleBatchDeactivate(): Promise<void> {
+  // ── Bulk deactivation ──
+  let batchDialogOpened = $state(false);
+  let batchPending = $state(false);
+
+  function openBatchDeactivateDialog(): void {
+    if (selectedIds.size === 0 || batchPending) return;
+    batchDialogOpened = true;
+  }
+
+  async function confirmBatchDeactivate(): Promise<void> {
+    batchDialogOpened = false;
+    if (batchPending) return;
     const ids = [...selectedIds];
     if (ids.length === 0) return;
+    batchPending = true;
 
     let succeeded = 0;
+    let refused = 0;
 
+    // A refusal does not stop the run. The refused account stays selected so
+    // the admin can open it, where the single-account flow names the reason.
     for (const uid of ids) {
       try {
         await authRouter.setUserActive.mutate({ userId: uid, isActive: false });
+        selectedIds.delete(uid);
         succeeded++;
       } catch {
-        toastStore.show(m.error_generic(), 3000);
-        exitMultiSelect();
-        return;
+        refused++;
       }
     }
 
-    haptic();
-    toastStore.show(m.admin_users_batch_deactivated({ count: succeeded }));
-    exitMultiSelect();
+    batchPending = false;
     void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+
+    if (refused === 0) {
+      haptic();
+      toastStore.show(m.admin_users_batch_deactivated({ count: succeeded }));
+      exitMultiSelect();
+      return;
+    }
+
+    toastStore.show(
+      m.admin_users_batch_deactivate_result({ succeeded, refused }),
+      3000,
+    );
   }
 </script>
 
@@ -611,7 +635,7 @@
         small
         inline
         class="bulk-action-btn"
-        onclick={() => void handleBatchDeactivate()}
+        onclick={openBatchDeactivateDialog}
       >
         <UserMinus size={16} aria-hidden="true" />
         {m.admin_users_batch_deactivate()}
@@ -835,6 +859,32 @@
       {:else}
         {m.admin_deactivate()}
       {/if}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
+<ShellDialog
+  opened={batchDialogOpened}
+  ondismiss={() => (batchDialogOpened = false)}
+  title={selectedIds.size === 1
+    ? m.admin_batch_deactivate_title_one()
+    : m.admin_batch_deactivate_title_other({ count: selectedIds.size })}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.admin_batch_deactivate_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={() => (batchDialogOpened = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      strong
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={() => void confirmBatchDeactivate()}
+    >
+      {m.admin_deactivate()}
     </DialogButton>
   {/snippet}
 </ShellDialog>
