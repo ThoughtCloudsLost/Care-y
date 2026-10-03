@@ -1,15 +1,30 @@
 # Categories for the generated notes on each GitHub Release, matched by pull
-# request label in this order. A pull request labelled changelog:skip is left
+# request label in this order; a pull request lands in the first category
+# whose label it carries. A pull request labelled changelog:skip is left
 # out. Unmatched pull requests land under "Other changes"; without a "*"
 # category GitHub would drop them from the notes.
+#
+# The order is by what a reader has to decide. A self-hosting organisation
+# reads "Action required" first. Someone deciding whether to trust the app
+# reads Security, Privacy and Accessibility before the feature list.
+# pr-label.yml checks that a label agrees with the commit types behind it.
 changelog:
   exclude:
     labels:
       - changelog:skip
   categories:
+    - title: Action required
+      labels:
+        - action-required
     - title: Security
       labels:
         - security
+    - title: Privacy
+      labels:
+        - privacy
+    - title: Accessibility
+      labels:
+        - accessibility
     - title: Features
       labels:
         - enhancement
@@ -19,6 +34,9 @@ changelog:
     - title: Documentation
       labels:
         - documentation
+    - title: Localization
+      labels:
+        - localization
     # The labels Dependabot applies.
     - title: Dependencies
       labels:

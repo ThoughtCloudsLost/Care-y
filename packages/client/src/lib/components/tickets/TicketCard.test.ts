@@ -299,7 +299,7 @@ describe("TicketCard", () => {
     expect(mark?.getAttribute("aria-label")).toBe("On hold");
   });
 
-  it("fades closed tickets and strikes the title", () => {
+  it("marks closed tickets with the muted struck title", () => {
     const { container } = render(TicketCard, {
       props: { ...defaults, displayStatus: "closed" as const },
     });

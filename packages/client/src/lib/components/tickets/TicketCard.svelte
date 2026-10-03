@@ -537,12 +537,14 @@
     opacity: 1;
   }
 
-  .tc-closed {
-    opacity: 0.52;
-  }
-
+  /* Closed is a quiet state said through the ink tokens, not a fade on
+     the card: a whole-card opacity pulled the meta row and the search
+     highlight under 4.5:1 on the dark surfaces. The struck title drops to
+     the muted ink at full strength; the meta row already sits there. */
   .tc-closed .r-title,
   .tc-closed .row-title {
+    color: var(--muted);
+    opacity: 1;
     text-decoration: line-through;
     text-decoration-color: var(--hair-2);
     text-decoration-thickness: 1px;

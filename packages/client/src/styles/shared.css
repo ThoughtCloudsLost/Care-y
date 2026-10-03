@@ -819,7 +819,10 @@ html.glass-dark.light
   letter-spacing: 0.03em;
   text-shadow: 0 0 0.5px currentColor;
   transform: rotate(-6deg);
-  opacity: 0.85;
+  /* No element opacity: the ring fades through color-mix above, and the
+     initials stay at the derived brand text colour, which is built to
+     clear 4.5:1 on the darkest surface. A fade on the whole seal pulled
+     them under it. */
 }
 
 /* ── Section line anatomy ──

@@ -1,17 +1,29 @@
 name: PR label
 
 # Every pull request carries one changelog label before it can merge, so
-# the generated release notes (.github/release.yml) file it under
-# Security, Features, Fixes, Documentation or Dependencies instead of
-# "Other changes". changelog:skip is the deliberate opt-out for housekeeping
-# nobody needs to read about. The check reruns when labels change, so a
-# forgotten label is fixed by adding one, not by pushing.
+# the generated release notes (.github/release.yml) file it under the right
+# heading instead of "Other changes". changelog:skip is the deliberate
+# opt-out for housekeeping nobody needs to read about.
+#
+# The label also has to agree with the commit types behind it. commitlint
+# already fixes each commit's type, so the type is the one signal here that
+# nobody picks at PR time. A fix, feat, docs or perf commit is a change a
+# reader of the notes can meet. A test, ci, chore, build, refactor or style
+# commit is not.
+# A label that contradicts the commits fails the check. A fix with its own
+# test commits is one concern and passes under bug; a branch of test-only
+# commits cannot pass under bug, and product commits cannot hide under
+# changelog:skip, which is what keeps the notes honest.
+#
+# The check reruns when labels change, so a wrong label is fixed by
+# relabelling, not by pushing.
 on:
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled]
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   pr-label:
@@ -23,7 +35,7 @@ jobs:
         env:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
         run: |
-          allowed="security enhancement bug documentation dependencies github_actions javascript changelog:skip"
+          allowed="action-required security privacy accessibility enhancement bug documentation localization dependencies github_actions javascript changelog:skip"
           for label in $LABELS; do
             for ok in $allowed; do
               if [ "$label" = "$ok" ]; then
@@ -34,3 +46,70 @@ jobs:
           done
           echo "::error::This pull request has no changelog label. Add one of: $allowed"
           exit 1
+
+      - name: The label agrees with the commit types
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          # Commit subjects on the pull request. The API call fails the job on
+          # its own (no pipe, no fallback), so an outage never reads as "no
+          # commits". Merge commits are left out afterwards; grep's no-match
+          # exit is the one thing swallowed.
+          all_subjects=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits" --paginate \
+            --jq '.[].commit.message | split("\n")[0]')
+          if [ "$(printf '%s\n' "$all_subjects" | grep -c .)" -ge 250 ]; then
+            echo "::error::The commits endpoint stops at 250 commits, so this pull request cannot be checked whole. Split it."
+            exit 1
+          fi
+          subjects=$(printf '%s\n' "$all_subjects" | grep -v '^Merge ' || true)
+
+          product=0; fix=0; feat=0; docs=0; housekeeping=0
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+            type=$(printf '%s' "$subject" | sed -nE 's/^([a-z]+)(\([^)]*\))?!?:.*/\1/p')
+            case "$type" in
+              fix)  product=1; fix=1 ;;
+              perf) product=1; fix=1; feat=1 ;;
+              feat) product=1; feat=1 ;;
+              docs) product=1; docs=1 ;;
+              # A revert undoes a shipped change, which a reader meets as a fix.
+              revert) product=1; fix=1 ;;
+              test|ci|chore|build|refactor|style) housekeeping=1 ;;
+              *) echo "::error::Commit subject has no conventional type: $subject"; exit 1 ;;
+            esac
+          done <<EOF
+          $subjects
+          EOF
+
+          fail() { echo "::error::$1"; exit 1; }
+
+          for label in $LABELS; do
+            case "$label" in
+              changelog:skip)
+                [ "$product" = 1 ] && fail "changelog:skip, but the pull request has fix, feat, docs or perf commits. Label it for what they are, or split them out." ;;
+              bug)
+                [ "$fix" = 1 ] || fail "bug, but no fix or perf commit. A test-only or housekeeping pull request takes changelog:skip." ;;
+              enhancement)
+                [ "$feat" = 1 ] || fail "enhancement, but no feat or perf commit." ;;
+              documentation)
+                [ "$docs" = 1 ] || fail "documentation, but no docs commit." ;;
+              security|privacy|accessibility|localization|action-required)
+                [ "$product" = 1 ] || fail "$label, but no fix, feat, docs or perf commit to file under it." ;;
+              dependencies|github_actions|javascript)
+                if [ "$AUTHOR" != "dependabot[bot]" ] && [ "$product" = 1 ]; then
+                  fail "$label is for dependency bumps, but the pull request has product commits."
+                fi ;;
+            esac
+          done
+
+          if [ "$product" = 0 ] && [ "$housekeeping" = 1 ]; then
+            case " $LABELS " in
+              *" changelog:skip "*|*" dependencies "*|*" github_actions "*|*" javascript "*) ;;
+              *) fail "Only test, ci, chore, build, refactor or style commits here; the label is changelog:skip." ;;
+            esac
+          fi
+
+          echo "label and commit types agree"
