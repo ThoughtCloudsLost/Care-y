@@ -1,18 +1,21 @@
 name: Deploy demo site
 
+# The handbook (the demo site on GitHub Pages) deploys in two ways and never
+# on a plain merge to main:
+#
+#   - with production: the Release workflow calls this one after its deploy
+#     job succeeds. The handbook then updates whenever production does,
+#     from the same commit, and only once production is up.
+#   - ahead of production: a tag `handbook-<production version>-<n>` on a
+#     main commit with a green CI run, for example handbook-0.2.0-1 for the
+#     first handbook update after v0.2.0. The counter resets at the next
+#     production release, which carries the handbook with it.
+#
+# workflow_dispatch stays as the manual escape hatch.
 on:
+  workflow_call:
   push:
-    branches: [main]
-    paths:
-      - packages/demo/**
-      - packages/client/src/lib/**
-      - packages/client/src/styles/**
-      - packages/client/src/routes/**
-      - packages/client/static/fonts/**
-      - packages/shared/messages/**
-      - packages/shared/src/**
-      - packages/server/src/**
-      - packages/crypto/src/**
+    tags: ["handbook-[0-9]+.[0-9]+.[0-9]+-[0-9]+"]
   workflow_dispatch:
 
 concurrency:
@@ -20,7 +23,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # For a handbook tag, the same checks the release workflow makes on a
+  # version tag. A workflow_call arrives after those checks already passed
+  # on the release side; a workflow_dispatch is the operator's own call.
+  verify:
+    # A workflow_call inherits the caller's event, a push of the version tag,
+    # so the ref name is what tells a handbook tag apart.
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'handbook-')
+    name: Verify handbook tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+      actions: read # gh run list
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Tag commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main"
+            exit 1
+          fi
+
+      - name: CI passed at this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI \
+            --commit "$GITHUB_SHA" --status success --json databaseId --jq 'length')"
+          if [ "$runs" -eq 0 ]; then
+            echo "::error::No successful CI run for $GITHUB_SHA"
+            exit 1
+          fi
+
   build:
+    needs: verify
+    # verify is skipped for workflow_call and workflow_dispatch; build runs
+    # when verify passed or was skipped, never when it failed.
+    if: always() && needs.verify.result != 'failure' && needs.verify.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -32,17 +79,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup
+        uses: ./.github/actions/setup
 
       - name: Compile shared paraglide
         run: pnpm --filter @care-y/shared run build:paraglide
