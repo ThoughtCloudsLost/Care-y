@@ -8,6 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { RoleId, ErrorCode } from "@care-y/shared";
 import type { UserRecord } from "$lib/admin/users-section-utils.js";
 import type * as BufferEncoding from "$lib/utils/buffer-encoding.js";
@@ -1021,7 +1022,7 @@ describe("UsersSection", () => {
       expect(closedTitles).toContain("Deactivate 3 accounts?");
     });
 
-    it("ignores the exit control and card toggles while a bulk deactivation runs", async () => {
+    it("ignores the exit control, the header toggle and card toggles while a bulk deactivation runs", async () => {
       mockUsersData = [makeUser("u-1"), makeUser("u-2"), makeUser("u-3")];
       mockSetUserActive.mockReturnValueOnce(
         new Promise<never>(() => undefined),
@@ -1040,6 +1041,8 @@ describe("UsersSection", () => {
       );
       await fireEvent.click(screen.getByRole("button", { name: "u-2" }));
       await fireEvent.click(screen.getByRole("button", { name: "u-3" }));
+      component.toggleMultiSelect();
+      await tick();
 
       expect(component.isMultiSelectActive()).toBe(true);
       expect(

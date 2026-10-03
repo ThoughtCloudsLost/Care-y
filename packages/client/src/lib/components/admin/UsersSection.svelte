@@ -545,6 +545,7 @@
   const selectedIds = new SvelteSet<string>();
 
   export function toggleMultiSelect(): void {
+    if (batchPending) return;
     if (multiSelectActive) {
       exitMultiSelect();
     } else {
