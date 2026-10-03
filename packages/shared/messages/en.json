@@ -3216,6 +3216,7 @@
   "account_idle_warning": "Your session will end soon due to inactivity. Any activity keeps it signed in.",
   "account_signed_out": "You were signed out to protect your messages. Sign in to continue.",
   "account_signed_out_voluntary": "You are signed out. Sign in to continue.",
+  "account_signout_unconfirmed": "You are signed out on this device, but the server did not confirm it.",
   "account_new_password": "New password",
   "account_confirm_new_password": "Confirm new password",
   "account_upgrade_setup": "Set up account",

@@ -141,6 +141,8 @@
   let loginError = $state(false);
   let loginPhase = $state<LoginPhaseId>("idle");
   let signedOutMessage = $state("");
+  // Bumped on each sign-out, so only the latest revoke may write the note
+  let logoutGeneration = 0;
   let changePasswordPending = $state(false);
   let changePasswordError = $state("");
   let hintShown = $state(false);
@@ -195,6 +197,9 @@
           "clientPortal",
         ).accountSessionRenew.mutate(),
       onUnauthorized: () => {
+        // A renewal sent before sign-out can answer after it; the session
+        // has already ended and its sign-out note stays.
+        if (session === null) return;
         returnToLogin(m.account_signed_out());
       },
     });
@@ -688,18 +693,32 @@
   // ---------------------------------------------------------------------------
 
   async function handleLogout(): Promise<void> {
+    // No earlier note shows while this revoke is in flight
+    signedOutMessage = "";
+    const generation = ++logoutGeneration;
     // Keys leave memory before the network call: revoking needs only the
     // session cookie, and a slow or hanging request must not keep them.
     returnToLogin();
+
+    // A revoke that settles after a newer sign-out, or after the user signed
+    // in again, leaves the current state alone
+    function settleSignOut(message: string): void {
+      if (generation === logoutGeneration && session === null) {
+        signedOutMessage = message;
+      }
+    }
+
     const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
     try {
       await portalRouter.accountLogout.mutate();
-      signedOutMessage = m.account_signed_out_voluntary();
+      settleSignOut(m.account_signed_out_voluntary());
     } catch (err: unknown) {
       // UNAUTHORIZED means the server holds no session to end
-      signedOutMessage = isUnauthorizedTrpcError(err)
-        ? m.account_signed_out_voluntary()
-        : m.auth_signout_unconfirmed();
+      settleSignOut(
+        isUnauthorizedTrpcError(err)
+          ? m.account_signed_out_voluntary()
+          : m.account_signout_unconfirmed(),
+      );
     }
   }
 

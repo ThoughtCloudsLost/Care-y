@@ -3216,6 +3216,7 @@
   "account_idle_warning": "Tu sesión terminará pronto por inactividad. Cualquier actividad la mantiene activa.",
   "account_signed_out": "Se cerró tu sesión para proteger tus mensajes. Inicia sesión para continuar.",
   "account_signed_out_voluntary": "Has cerrado sesión. Inicia sesión para continuar.",
+  "account_signout_unconfirmed": "Has cerrado sesión en este dispositivo, pero el servidor no lo confirmó.",
   "account_new_password": "Nueva contraseña",
   "account_confirm_new_password": "Confirmar nueva contraseña",
   "account_upgrade_setup": "Crear cuenta",

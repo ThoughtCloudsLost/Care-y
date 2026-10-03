@@ -23,6 +23,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { TRPCClientError } from "@trpc/client";
+import { ACCOUNT_SESSION_RENEW_INTERVAL_MS } from "$lib/portal/account-session-renewal.js";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as PortalContext from "$lib/portal/context.js";
 import type * as TanstackQuery from "@tanstack/svelte-query";
@@ -197,6 +198,9 @@ const mockGetAccountSalt = vi.fn<PortalProcedureMock>().mockResolvedValue({
 });
 const mockAccountLogin = vi.fn<PortalProcedureMock>().mockResolvedValue({});
 const mockAccountLogout = vi.fn<PortalProcedureMock>().mockResolvedValue({});
+const mockAccountSessionRenew = vi
+  .fn<PortalProcedureMock>()
+  .mockResolvedValue({});
 const mockAccountReply = vi.fn<PortalProcedureMock>().mockResolvedValue({});
 const mockAccountChangePassword = vi
   .fn<PortalProcedureMock>()
@@ -354,7 +358,7 @@ vi.mock("$lib/trpc/index.js", () => {
           mutate: (...args: unknown[]) => mockAccountLogout(...args),
         },
         accountSessionRenew: {
-          mutate: vi.fn().mockResolvedValue({}),
+          mutate: (...args: unknown[]) => mockAccountSessionRenew(...args),
         },
         accountReply: {
           mutate: (...args: unknown[]) => mockAccountReply(...args),
@@ -412,7 +416,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   account_login_failed: () => "Login failed",
   account_signed_out: () => "Signed out",
   account_signed_out_voluntary: () => "Signed out voluntary",
-  auth_signout_unconfirmed: () => "Sign-out unconfirmed",
+  account_signout_unconfirmed: () => "Account sign-out unconfirmed",
   account_idle_warning: () => "Idle warning",
   account_unlocking: () => "Unlocking...",
   account_change_success: () => "Password changed",
@@ -556,7 +560,18 @@ function installBridgeFactory(): void {
  * logout action. Returns the session's worker.
  */
 async function signIn(): Promise<MockWorkerInstance> {
-  const form = renderLoginForm();
+  renderLoginForm();
+  return submitLogin();
+}
+
+/**
+ * Submit the login form already on the page and wait until the drawer
+ * publishes the logout action. Returns the new session's worker.
+ */
+async function submitLogin(): Promise<MockWorkerInstance> {
+  const form = document.querySelector("form");
+  if (form === null) throw new Error("login form not rendered");
+  const workersBefore = mockWorkerInstances.length;
   const inputs = form.querySelectorAll("input");
   const usernameInput = inputs[0];
   const passwordInput = inputs[1];
@@ -573,10 +588,10 @@ async function signIn(): Promise<MockWorkerInstance> {
   await fireEvent.submit(form);
 
   await vi.waitFor(() => {
-    expect(mockWorkerInstances).toHaveLength(1);
+    expect(mockWorkerInstances).toHaveLength(workersBefore + 1);
   });
 
-  const worker = mockWorkerInstances[0]!;
+  const worker = mockWorkerInstances[workersBefore]!;
   autoRespondWorker(worker);
 
   await vi.waitFor(() => {
@@ -599,6 +614,22 @@ function clickLogout(): void {
 function signedOutNoteText(): string | null {
   const note = document.querySelector('[data-testid="signed-out-note"]');
   return note?.textContent.trim() ?? null;
+}
+
+/** Let pending promise continuations run before asserting. */
+async function flushSettled(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+/** The UNAUTHORIZED error a tRPC call rejects with. */
+function unauthorizedError(): TRPCClientError<never> {
+  return TRPCClientError.from({
+    error: {
+      message: "Not authenticated",
+      code: -32001,
+      data: { code: "UNAUTHORIZED" },
+    },
+  });
 }
 
 // -- Tests --------------------------------------------------------------------
@@ -792,15 +823,7 @@ describe("account page", () => {
 
     it("treats an UNAUTHORIZED answer as confirmed", async () => {
       await signIn();
-      mockAccountLogout.mockRejectedValueOnce(
-        TRPCClientError.from({
-          error: {
-            message: "Not authenticated",
-            code: -32001,
-            data: { code: "UNAUTHORIZED" },
-          },
-        }),
-      );
+      mockAccountLogout.mockRejectedValueOnce(unauthorizedError());
 
       clickLogout();
 
@@ -816,8 +839,75 @@ describe("account page", () => {
       clickLogout();
 
       await vi.waitFor(() => {
-        expect(signedOutNoteText()).toBe("Sign-out unconfirmed");
+        expect(signedOutNoteText()).toBe("Account sign-out unconfirmed");
       });
+    });
+
+    it("ignores a revoke that settles after the user signed in again", async () => {
+      await signIn();
+      let settleRevoke: (() => void) | undefined;
+      mockAccountLogout.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            settleRevoke = () => {
+              resolve({});
+            };
+          }),
+      );
+
+      clickLogout();
+      expect(mockAccountLogout).toHaveBeenCalledOnce();
+
+      await submitLogin();
+
+      settleRevoke?.();
+      await flushSettled();
+
+      // Ending the new session without a message shows the bare login form
+      window.dispatchEvent(new Event("pagehide"));
+      await vi.waitFor(() => {
+        expect(capturedShellState?.actions.some((a) => a.id === "logout")).toBe(
+          false,
+        );
+      });
+      expect(document.querySelector("form")).not.toBeNull();
+      expect(signedOutNoteText()).toBeNull();
+    });
+
+    it("a late renewal failure after sign-out does not replace the sign-out message", async () => {
+      // Fake only the clock, so the renewal throttle can be passed while
+      // promises and waitFor keep running on real timers
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await signIn();
+
+        let failRenewal: (() => void) | undefined;
+        mockAccountSessionRenew.mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              failRenewal = () => {
+                reject(unauthorizedError());
+              };
+            }),
+        );
+
+        vi.setSystemTime(Date.now() + ACCOUNT_SESSION_RENEW_INTERVAL_MS + 1);
+        await fireEvent.keyDown(document);
+        expect(mockAccountSessionRenew).toHaveBeenCalledOnce();
+
+        mockAccountLogout.mockResolvedValueOnce({});
+        clickLogout();
+        await vi.waitFor(() => {
+          expect(signedOutNoteText()).toBe("Signed out voluntary");
+        });
+
+        failRenewal?.();
+        await flushSettled();
+
+        expect(signedOutNoteText()).toBe("Signed out voluntary");
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
