@@ -1,15 +1,16 @@
 name: E2E
 
 # Runs the Playwright suite, or the full merged coverage report, on a hosted
-# runner, on demand only. It is not a required check and nothing triggers
-# it automatically: both are slow and heavier than an 8 GB development
-# machine likes, so this is a way to run them elsewhere. Start it from the
-# Actions tab or with
+# runner. Never a required check. Three ways in:
 #
 #   gh workflow run e2e.yml -f mode=e2e -f projects=chromium
-#   gh workflow run e2e.yml -f mode=coverage-full
+#   gh workflow run e2e.yml -f mode=coverage-full --ref <branch>
+#   the CI gate dispatches coverage-full for a ready pull request whose
+#   green run changed code (see ci.yml); the weekly schedule runs it on main.
 #
-# The reports are attached to the run as artifacts either way.
+# A coverage-full run for a branch with a pull request rewrites the
+# "Coverage thresholds met" line in that pull request's body. The reports
+# are attached to the run as artifacts either way.
 on:
   workflow_dispatch:
     inputs:
@@ -27,14 +28,29 @@ on:
         options:
           - chromium
           - all
+  schedule:
+    # Monday 06:23 UTC: coverage-full on main, report on the run, no pull
+    # request touched.
+    - cron: "23 6 * * 1"
+
+# One live run per branch and mode. A newer coverage-full dispatch for the
+# same branch cancels the older one; a hand-dispatched e2e run on that
+# branch is a different group and is left alone.
+concurrency:
+  group: e2e-${{ github.ref_name }}-${{ github.event_name == 'schedule' && 'coverage-full' || inputs.mode }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
+  pull-requests: write # the coverage line on the pull request
 
 jobs:
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      MODE: ${{ github.event_name == 'schedule' && 'coverage-full' || inputs.mode }}
+      PROJECTS: ${{ inputs.projects || 'chromium' }}
 
     steps:
       - name: Checkout
@@ -47,7 +63,7 @@ jobs:
 
       - name: Install Playwright browsers
         run: |
-          if [ "${{ inputs.mode }}" = "e2e" ] && [ "${{ inputs.projects }}" = "all" ]; then
+          if [ "$MODE" = "e2e" ] && [ "$PROJECTS" = "all" ]; then
             pnpm exec playwright install --with-deps
           else
             pnpm exec playwright install --with-deps chromium
@@ -68,6 +84,8 @@ jobs:
           SMTP_HOST=mailpit
           SMTP_PORT=1025
           SMTP_FROM=noreply@test.care-y.app
+          BLOB_STORE_TYPE=local
+          BLOB_STORE_PATH=/app/data
           EOF
           # Strip leading whitespace from heredoc (YAML block scalar indentation)
           sed -i 's/^[[:space:]]*//' .env
@@ -89,15 +107,15 @@ jobs:
       # coverage:full runs the server suite inside the test stack. It
       # publishes no ports, so it sits beside the dev stack.
       - name: Test stack
-        if: inputs.mode == 'coverage-full'
+        if: env.MODE == 'coverage-full'
         run: docker compose -f docker-compose.test.yml up -d --build --wait
 
       # Playwright starts Vite on :5174 itself (webServer in the config).
       # CI=true, which the runner sets, gives the suite its two retries.
       - name: Playwright
-        if: inputs.mode == 'e2e'
+        if: env.MODE == 'e2e'
         run: |
-          if [ "${{ inputs.projects }}" = "all" ]; then
+          if [ "$PROJECTS" = "all" ]; then
             pnpm test:e2e
           else
             pnpm test:e2e --project=chromium --project=onboarding-setup --project=onboarding --project=first-login
@@ -108,8 +126,62 @@ jobs:
       # artifact. The script's attempt to open the report in a browser is a
       # quiet no-op here.
       - name: Coverage, full
-        if: inputs.mode == 'coverage-full'
+        if: env.MODE == 'coverage-full'
         run: pnpm coverage:full
+
+      # The first run failed inside the seed replay with a 500 from the API;
+      # the browser log only says a blob write failed. The API's own log is
+      # the one that names the cause.
+      - name: API log after a failure
+        if: failure()
+        run: docker compose logs --no-color --tail 300 app oprf-a oprf-b
+
+      # Rewrites the "Coverage thresholds met" line on the branch's pull
+      # request: ticked with the run link when every package meets its
+      # target, unticked with the shortfalls when one does not, unticked
+      # with "run failed" when the merged summary never appeared. The line
+      # names the commit so a reader can tell which push the numbers are for.
+      - name: Write the coverage line on the pull request
+        if: always() && env.MODE == 'coverage-full' && github.event_name != 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FULL_SHA: ${{ github.sha }}
+        run: |
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state all --json number --jq '.[0].number')"
+          if [ -z "$pr" ]; then echo "no pull request for $GITHUB_REF_NAME, nothing to write"; exit 0; fi
+          gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json body --jq .body > body.md
+          python3 - "$RUN_URL" "${FULL_SHA:0:7}" <<'EOF'
+          import json, os, re, sys
+          url, sha = sys.argv[1], sys.argv[2]
+          body = open("body.md").read()
+          line = re.compile(r"^- \[[ x]\] Coverage thresholds met.*$", re.M)
+          if not line.search(body):
+              print("no coverage line in the body, nothing to write")
+              sys.exit(0)
+          summary = "coverage/merged/summary.json"
+          if not os.path.exists(summary):
+              text = f"- [ ] Coverage thresholds met (coverage-full run failed on {sha}: [run]({url}))"
+          else:
+              got = json.load(open(summary))
+              targets = json.load(open("coverage-thresholds.json"))
+              short = []
+              for pkg, target in targets.items():
+                  have = got.get(pkg)
+                  if have is None:
+                      short.append(f"{pkg} not measured")
+                      continue
+                  for axis, want in target.items():
+                      if have[axis] < want:
+                          short.append(f"{pkg} {axis} {have[axis]} < {want}")
+              if short:
+                  text = f"- [ ] Coverage thresholds met (below on {sha}: {'; '.join(short)}; [run]({url}))"
+              else:
+                  text = f"- [x] Coverage thresholds met (coverage-full run on {sha}: [run]({url}))"
+          open("body.md", "w").write(line.sub(text, body, count=1))
+          print(text)
+          EOF
+          gh pr edit "$pr" --repo "$GITHUB_REPOSITORY" --body-file body.md
 
       - name: Upload Playwright report
         if: always()
@@ -121,7 +193,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload coverage report
-        if: always() && inputs.mode == 'coverage-full'
+        if: always() && env.MODE == 'coverage-full'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-merged
