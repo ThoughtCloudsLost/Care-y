@@ -72,7 +72,10 @@
   import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import { buildAddPassphrasePayload } from "$lib/portal/add-passphrase-crypto.js";
-  import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
+  import {
+    CHAT_PAGE_SIZE,
+    createChatPaginator,
+  } from "$lib/tickets/chat-paginator.svelte.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
 
   import LinkErrorState from "$lib/portal/LinkErrorState.svelte";
@@ -207,8 +210,6 @@
   // Polling query for new messages (5-minute interval + focus refetch)
   const queryClient = useQueryClient();
 
-  const PAGE_SIZE = 50;
-
   /** One page of the thread, newest-first from the server, oldest-first out. */
   async function fetchMessagePage(
     cursor?: string,
@@ -221,7 +222,7 @@
     return trpc.clientPortal.portalMessagePage.query({
       channelId: fragment.fragmentData.channelId,
       auth: encode(fragment.fragmentData.auth),
-      limit: PAGE_SIZE,
+      limit: CHAT_PAGE_SIZE,
       direction: "older",
       ...(cursor === undefined ? {} : { cursor }),
     });
@@ -248,7 +249,7 @@
   // The same paginator the volunteer thread runs on. It reads its cache key
   // and its end-of-history total from here rather than assuming a ticket.
   const paginator = createChatPaginator<PortalMessageWire>({
-    pageSize: PAGE_SIZE,
+    pageSize: CHAT_PAGE_SIZE,
     queryClient,
     getPageQueryKey: (cursor: string) =>
       portalKeys.messagePage(routeChannelId, cursor),

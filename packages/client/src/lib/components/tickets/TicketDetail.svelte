@@ -114,7 +114,10 @@
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import { createLongPress } from "$lib/composables/create-long-press.svelte.js";
-  import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
+  import {
+    CHAT_PAGE_SIZE,
+    createChatPaginator,
+  } from "$lib/tickets/chat-paginator.svelte.js";
   import {
     getContextMenuActions,
     type ContextMenuEvent,
@@ -261,8 +264,6 @@
 
   const queryClient = useQueryClient();
 
-  const PAGE_SIZE = 50;
-
   // Optimistic reaction overrides: followupId -> ReactionSummary[]
   const reactionOverrides = new SvelteMap<string, ReactionSummary[]>();
 
@@ -288,13 +289,13 @@
     enabled: enabledTicketId(ticketId),
   }));
 
-  // Initial query: most recent PAGE_SIZE follow-ups (direction='older', no cursor).
+  // Initial query: most recent CHAT_PAGE_SIZE follow-ups (direction='older', no cursor).
   const initialFollowUpsQuery = createQuery(() => ({
     queryKey: ticketKeys.followUpsInitial(ticketId),
     queryFn: async () =>
       fetchFollowUps({
         ticketId,
-        limit: PAGE_SIZE,
+        limit: CHAT_PAGE_SIZE,
         direction: "older",
       }),
     enabled: enabledTicketId(ticketId),
@@ -445,14 +446,14 @@
   // --- Pagination ---
 
   const paginator = createChatPaginator({
-    pageSize: PAGE_SIZE,
+    pageSize: CHAT_PAGE_SIZE,
     queryClient,
     getPageQueryKey: (cursor: string) =>
       ticketKeys.followUpsPage(ticketId, cursor),
     fetchPage: async (cursor) =>
       fetchFollowUps({
         ticketId,
-        limit: PAGE_SIZE,
+        limit: CHAT_PAGE_SIZE,
         cursor,
         direction: "older",
       }),
@@ -1240,7 +1241,7 @@
   });
 
   const totalSlots = $derived(
-    Math.min(knownFollowUpCount ?? ticket?.followUpCount ?? 6, PAGE_SIZE),
+    Math.min(knownFollowUpCount ?? ticket?.followUpCount ?? 6, CHAT_PAGE_SIZE),
   );
   const fillerCount = $derived(
     Math.max(0, totalSlots - orderedPreviews.length),
