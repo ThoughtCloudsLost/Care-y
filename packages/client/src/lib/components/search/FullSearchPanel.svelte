@@ -74,10 +74,14 @@
                 />
               {/if}
               <span class="progress-count">
-                {m.search_full_progress({
-                  searched: providerState.searched,
-                  total: providerState.total,
-                })}
+                {#if providerState.total > 0}
+                  {m.search_full_progress({
+                    searched: providerState.searched,
+                    total: providerState.total,
+                  })}
+                {:else}
+                  {providerState.searched}
+                {/if}
               </span>
             {/if}
           </div>

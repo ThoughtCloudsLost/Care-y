@@ -280,13 +280,16 @@ describe("FullSearchPanel", () => {
         ),
       ),
     );
-    const { container, getByRole, getByText } = render(FullSearchPanel, {
-      props: {
-        query: "housing",
-        groups: [makeGroup(0)],
-        hasAnyResults: true,
+    const { container, getByRole, getByText, queryByText } = render(
+      FullSearchPanel,
+      {
+        props: {
+          query: "housing",
+          groups: [makeGroup(0)],
+          hasAnyResults: true,
+        },
       },
-    });
+    );
     await fireEvent.click(
       getByRole("button", { name: "Search everything not yet unlocked" }),
     );
@@ -294,7 +297,8 @@ describe("FullSearchPanel", () => {
     await waitFor(() => {
       expect(getByText("3/8")).toBeDefined();
     });
-    expect(getByText("3/0")).toBeDefined();
+    expect(getByText("3")).toBeDefined();
+    expect(queryByText("3/0")).toBeNull();
     expect(container.querySelectorAll('[style*="translateX"]')).toHaveLength(1);
 
     releaseA();
