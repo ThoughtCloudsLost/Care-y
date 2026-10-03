@@ -375,6 +375,7 @@ describe("Settings page", () => {
     mockToastShow.mockClear();
     mockSchemeToggle.mockClear();
     mockSavePreferredLocale.mockClear();
+    mockSetLocale.mockClear();
     mockGetLocale.mockReturnValue("en");
     mockDecrypt.mockReturnValue("Test User");
     mockResolvedScheme.value = "dark";
@@ -383,6 +384,8 @@ describe("Settings page", () => {
 
   afterEach(() => {
     cleanup();
+    document.documentElement.lang = "en";
+    document.documentElement.dir = "ltr";
   });
 
   // ── Profile data derivation ──────────────────────────────────────
@@ -624,6 +627,25 @@ describe("Settings page", () => {
       await vi.waitFor(() => {
         expect(mockToastShow).toHaveBeenCalledWith(
           "Could not update preferred language",
+        );
+      });
+    });
+
+    it("applies the new language to the session and re-renders the page", async () => {
+      mockDecrypt.mockReturnValue("en");
+      twoFactorStatusState.data = { methods: [] };
+      render(SettingsPage);
+
+      const rowBefore = screen.getByTestId("settings-preferred-language-row");
+      await fireEvent.click(rowBefore);
+
+      await vi.waitFor(() => {
+        expect(mockSetLocale).toHaveBeenCalledWith("es", { reload: false });
+        expect(document.documentElement.lang).toBe("es");
+        expect(document.documentElement.dir).toBe("ltr");
+        expect(rowBefore.isConnected).toBe(false);
+        expect(screen.getByTestId("settings-preferred-language-row")).not.toBe(
+          rowBefore,
         );
       });
     });

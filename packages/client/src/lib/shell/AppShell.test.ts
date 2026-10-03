@@ -25,6 +25,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Mock } from "vitest";
 import { render, cleanup, fireEvent, screen } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { Plus } from "@lucide/svelte";
@@ -35,6 +36,7 @@ import type * as SvelteQuery from "@tanstack/svelte-query";
 import type { NavbarOverride } from "./types.js";
 import type * as PathsNS from "$app/paths";
 import { getMockPermissions } from "$mocks/permissions.js";
+import { setLocale } from "$lib/paraglide/runtime.js";
 
 // --- Controllable mock state ---
 
@@ -323,6 +325,52 @@ describe("AppShell navbar", () => {
       const group = navbar(container).querySelector(".navbar-title-group");
       expect(group?.textContent).toContain("Safe Harbor");
       expect(group?.querySelector("select")).toBeTruthy();
+    });
+  });
+
+  describe("language switch", () => {
+    let addListener: Mock<HTMLElement["addEventListener"]>;
+
+    beforeEach(() => {
+      addListener = vi.spyOn(HTMLElement.prototype, "addEventListener");
+    });
+
+    afterEach(() => {
+      addListener.mockRestore();
+      void setLocale("en", { reload: false });
+      document.documentElement.lang = "en";
+      document.documentElement.dir = "ltr";
+    });
+
+    it("switches language in place, keeps pull-to-refresh, and still offers to save it", async () => {
+      const { container } = renderShell();
+      const childBefore = screen.getByTestId("shell-child");
+
+      const select = navbar(container).querySelector<HTMLSelectElement>(
+        ".navbar-title-group select",
+      );
+      expect(select).not.toBeNull();
+      await fireEvent.change(select!, { target: { value: "es" } });
+
+      expect(document.documentElement.lang).toBe("es");
+      expect(document.documentElement.dir).toBe("ltr");
+
+      expect(screen.getByRole("button", { name: "Cuenta" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Account" })).toBeNull();
+
+      expect(childBefore.isConnected).toBe(false);
+      expect(screen.getByTestId("shell-child")).not.toBe(childBefore);
+
+      const mainAfter = container.querySelector<HTMLElement>("#main-content");
+      expect(mainAfter).not.toBeNull();
+      const touchstartTargets = addListener.mock.contexts.filter(
+        (_ctx, i) => addListener.mock.calls[i]?.[0] === "touchstart",
+      );
+      expect(touchstartTargets).toContain(mainAfter);
+
+      expect(
+        await screen.findByText("¿Guardar preferencia de idioma?"),
+      ).toBeTruthy();
     });
   });
 

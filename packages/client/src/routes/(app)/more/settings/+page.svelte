@@ -28,6 +28,7 @@
     getLocale,
     setLocale,
     isLocale,
+    getTextDirection,
     type Locale,
   } from "$lib/paraglide/runtime.js";
   import { savePreferredLocale } from "$lib/settings/preferred-locale.js";
@@ -88,6 +89,7 @@
   });
 
   let localeSaving = $state(false);
+  let uiLocale = $state(getLocale());
 
   async function handleLocaleToggle(): Promise<void> {
     if (localeSaving || !orgKeyManager.isLoaded) return;
@@ -104,6 +106,8 @@
       if (isLocale(target) && target !== getLocale()) {
         void setLocale(target, { reload: false });
         document.documentElement.lang = target;
+        document.documentElement.dir = getTextDirection(target);
+        uiLocale = target;
       }
       const msg = m.settings_preferred_language_saved();
       toastStore.show(msg);
@@ -194,174 +198,176 @@
   </Link>
 {/snippet}
 
-<div class="settings-page">
-  <List strong inset>
-    <ListItem
-      title={m.settings_display_name()}
-      after={currentDisplayName ?? m.common_loading()}
-      link
-      onclick={() => {
-        displayNameSheetOpen = true;
-      }}
-    />
-  </List>
+{#key uiLocale}
+  <div class="settings-page">
+    <List strong inset>
+      <ListItem
+        title={m.settings_display_name()}
+        after={currentDisplayName ?? m.common_loading()}
+        link
+        onclick={() => {
+          displayNameSheetOpen = true;
+        }}
+      />
+    </List>
 
-  <List strong inset>
-    <ListItem
-      title={m.settings_username()}
-      after={currentUsername || m.common_loading()}
-      link
-      onclick={() => {
-        usernameSheetOpen = true;
-      }}
-    />
-  </List>
+    <List strong inset>
+      <ListItem
+        title={m.settings_username()}
+        after={currentUsername || m.common_loading()}
+        link
+        onclick={() => {
+          usernameSheetOpen = true;
+        }}
+      />
+    </List>
 
-  <List strong inset>
-    <ListItem
-      title={m.settings_password()}
-      after="********"
-      link
-      data-testid="settings-password-row"
-      onclick={() => {
-        passwordSheetOpen = true;
-      }}
-    />
-  </List>
+    <List strong inset>
+      <ListItem
+        title={m.settings_password()}
+        after="********"
+        link
+        data-testid="settings-password-row"
+        onclick={() => {
+          passwordSheetOpen = true;
+        }}
+      />
+    </List>
 
-  <BlockTitle>{m.settings_appearance()}</BlockTitle>
-  <List strong inset>
-    <ListItem
-      title={m.settings_preferred_language()}
-      after={storedLocaleDisplay}
-      link
-      data-testid="settings-preferred-language-row"
-      onclick={handleLocaleToggle}
-    />
-    <ListItem
-      title={m.settings_color_scheme()}
-      after={themeStore.resolvedScheme === "dark"
-        ? m.settings_dark_mode()
-        : m.settings_light_mode()}
-      link
-      data-testid="settings-color-scheme-row"
-      onclick={toggleSchemeWithPalette}
-    />
-    <ListItem
-      title={m.settings_refresh_app()}
-      link
-      onclick={() => {
-        location.reload();
-      }}
-    />
-  </List>
+    <BlockTitle>{m.settings_appearance()}</BlockTitle>
+    <List strong inset>
+      <ListItem
+        title={m.settings_preferred_language()}
+        after={storedLocaleDisplay}
+        link
+        data-testid="settings-preferred-language-row"
+        onclick={handleLocaleToggle}
+      />
+      <ListItem
+        title={m.settings_color_scheme()}
+        after={themeStore.resolvedScheme === "dark"
+          ? m.settings_dark_mode()
+          : m.settings_light_mode()}
+        link
+        data-testid="settings-color-scheme-row"
+        onclick={toggleSchemeWithPalette}
+      />
+      <ListItem
+        title={m.settings_refresh_app()}
+        link
+        onclick={() => {
+          location.reload();
+        }}
+      />
+    </List>
 
-  <BlockTitle>{m.consultant_phone_reachability_title()}</BlockTitle>
-  <List strong inset>
-    <ListItem
-      title={m.consultant_phone_title()}
-      after={consultantPhoneStatus}
-      link
-      onclick={() => {
-        consultantPhoneSheetOpen = true;
-      }}
-    />
-  </List>
+    <BlockTitle>{m.consultant_phone_reachability_title()}</BlockTitle>
+    <List strong inset>
+      <ListItem
+        title={m.consultant_phone_title()}
+        after={consultantPhoneStatus}
+        link
+        onclick={() => {
+          consultantPhoneSheetOpen = true;
+        }}
+      />
+    </List>
 
-  <BlockTitle>{m.settings_security()}</BlockTitle>
-  <List strong inset>
-    <ListItem
-      title={m.settings_2fa()}
-      after={twoFactorSummary}
-      link
-      onclick={() => {
-        twoFactorSheetOpen = true;
-      }}
-    />
-    <ListItem
-      title={m.settings_replay_walkthrough()}
-      link
-      onclick={() => {
-        toastStore.show(m.feature_coming_soon());
-      }}
-    />
-    <ListItem
-      title={m.settings_review_briefing()}
-      link
-      onclick={() => {
-        briefingPopupOpen = true;
-      }}
-    />
-  </List>
+    <BlockTitle>{m.settings_security()}</BlockTitle>
+    <List strong inset>
+      <ListItem
+        title={m.settings_2fa()}
+        after={twoFactorSummary}
+        link
+        onclick={() => {
+          twoFactorSheetOpen = true;
+        }}
+      />
+      <ListItem
+        title={m.settings_replay_walkthrough()}
+        link
+        onclick={() => {
+          toastStore.show(m.feature_coming_soon());
+        }}
+      />
+      <ListItem
+        title={m.settings_review_briefing()}
+        link
+        onclick={() => {
+          briefingPopupOpen = true;
+        }}
+      />
+    </List>
 
-  <NotificationPreferencesSection />
+    <NotificationPreferencesSection />
 
-  {#if import.meta.env.DEV}
-    <!-- eslint-disable care-y/no-hardcoded-strings -- dev-only UI, tree-shaken from production -->
-    <BlockTitle>Developer</BlockTitle>
-    <Block strong inset>
-      {#if seedPhase === "done"}
-        <p class="dev-seed-status">Seed data created.</p>
-      {:else if seedPhase === "error"}
-        <p class="dev-seed-error">{seedError}</p>
-      {:else if seedPhase === "seeding" && seedStatus}
-        <p class="dev-seed-progress">{seedStatus}</p>
-      {/if}
-      {#if seedPhase === "seeding"}
-        <Button large disabled>{seedStatus || "Seeding..."}</Button>
-      {:else}
-        <Button large onclick={handleDevSeed}>Seed Dev Data</Button>
-      {/if}
-    </Block>
-    <!-- eslint-enable care-y/no-hardcoded-strings -->
-  {/if}
-</div>
+    {#if import.meta.env.DEV}
+      <!-- eslint-disable care-y/no-hardcoded-strings -- dev-only UI, tree-shaken from production -->
+      <BlockTitle>Developer</BlockTitle>
+      <Block strong inset>
+        {#if seedPhase === "done"}
+          <p class="dev-seed-status">Seed data created.</p>
+        {:else if seedPhase === "error"}
+          <p class="dev-seed-error">{seedError}</p>
+        {:else if seedPhase === "seeding" && seedStatus}
+          <p class="dev-seed-progress">{seedStatus}</p>
+        {/if}
+        {#if seedPhase === "seeding"}
+          <Button large disabled>{seedStatus || "Seeding..."}</Button>
+        {:else}
+          <Button large onclick={handleDevSeed}>Seed Dev Data</Button>
+        {/if}
+      </Block>
+      <!-- eslint-enable care-y/no-hardcoded-strings -->
+    {/if}
+  </div>
 
-<DisplayNameSheet
-  opened={displayNameSheetOpen}
-  ondismiss={() => {
-    displayNameSheetOpen = false;
-  }}
-  currentName={currentDisplayName}
-/>
+  <DisplayNameSheet
+    opened={displayNameSheetOpen}
+    ondismiss={() => {
+      displayNameSheetOpen = false;
+    }}
+    currentName={currentDisplayName}
+  />
 
-<UsernameSheet
-  opened={usernameSheetOpen}
-  ondismiss={() => {
-    usernameSheetOpen = false;
-  }}
-  {currentUsername}
-/>
+  <UsernameSheet
+    opened={usernameSheetOpen}
+    ondismiss={() => {
+      usernameSheetOpen = false;
+    }}
+    {currentUsername}
+  />
 
-<PasswordSheet
-  opened={passwordSheetOpen}
-  ondismiss={() => {
-    passwordSheetOpen = false;
-  }}
-  {userId}
-/>
+  <PasswordSheet
+    opened={passwordSheetOpen}
+    ondismiss={() => {
+      passwordSheetOpen = false;
+    }}
+    {userId}
+  />
 
-<TwoFactorSheet
-  opened={twoFactorSheetOpen}
-  ondismiss={() => {
-    twoFactorSheetOpen = false;
-  }}
-  username={currentUsername}
-/>
+  <TwoFactorSheet
+    opened={twoFactorSheetOpen}
+    ondismiss={() => {
+      twoFactorSheetOpen = false;
+    }}
+    username={currentUsername}
+  />
 
-<SecurityBriefingPopup
-  opened={briefingPopupOpen}
-  onclose={() => {
-    briefingPopupOpen = false;
-  }}
-/>
+  <SecurityBriefingPopup
+    opened={briefingPopupOpen}
+    onclose={() => {
+      briefingPopupOpen = false;
+    }}
+  />
 
-<ConsultantPhoneSheet
-  opened={consultantPhoneSheetOpen}
-  ondismiss={() => {
-    consultantPhoneSheetOpen = false;
-  }}
-/>
+  <ConsultantPhoneSheet
+    opened={consultantPhoneSheetOpen}
+    ondismiss={() => {
+      consultantPhoneSheetOpen = false;
+    }}
+  />
+{/key}
 
 <style>
   .settings-page {
