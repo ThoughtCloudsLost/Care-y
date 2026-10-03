@@ -215,18 +215,19 @@ export function createAssignmentService(
     async release(userId, ticketId) {
       await access.assertAccess(userId, ticketId);
 
-      const ticket = await db
-        .selectFrom("tickets")
-        .select(["id", "assigned_to"])
-        .where("id", "=", ticketId)
-        .executeTakeFirst();
-
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      if (ticket.assigned_to !== userId) {
-        throw new TicketError(ErrorCode.NOT_ASSIGNED_TO_TICKET);
-      }
-
       await db.transaction().execute(async (trx) => {
+        const ticket = await trx
+          .selectFrom("tickets")
+          .select(["id", "assigned_to"])
+          .where("id", "=", ticketId)
+          .forUpdate()
+          .executeTakeFirst();
+
+        if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+        if (ticket.assigned_to !== userId) {
+          throw new TicketError(ErrorCode.NOT_ASSIGNED_TO_TICKET);
+        }
+
         await trx
           .updateTable("tickets")
           .set({ assigned_to: null })
@@ -244,34 +245,35 @@ export function createAssignmentService(
     async assignTo(actorId, ticketId, targetUserId) {
       await access.assertAccess(actorId, ticketId);
 
-      const ticket = await db
-        .selectFrom("tickets")
-        .select(["id", "status", "assigned_to"])
-        .where("id", "=", ticketId)
-        .executeTakeFirst();
-
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      if (ticket.status !== "open") {
-        throw new TicketError(ErrorCode.CANNOT_ASSIGN_CLOSED_TICKET);
-      }
-
-      if (targetUserId !== null) {
-        // Verify target is an active user in this tenant schema
-        const targetUser = await db
-          .selectFrom("users")
-          .select(["id", "is_active"])
-          .where("id", "=", targetUserId)
+      const changed = await db.transaction().execute(async (trx) => {
+        const ticket = await trx
+          .selectFrom("tickets")
+          .select(["id", "status", "assigned_to"])
+          .where("id", "=", ticketId)
+          .forUpdate()
           .executeTakeFirst();
 
-        if (targetUser?.is_active !== true) {
-          throw new ForbiddenError(ErrorCode.INVALID_TARGET_USER);
+        if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+        if (ticket.status !== "open") {
+          throw new TicketError(ErrorCode.CANNOT_ASSIGN_CLOSED_TICKET);
         }
-      }
 
-      // Skip DB write if assignment is already in the desired state
-      if (ticket.assigned_to === targetUserId) return;
+        if (targetUserId !== null) {
+          // Verify target is an active user in this tenant schema
+          const targetUser = await trx
+            .selectFrom("users")
+            .select(["id", "is_active"])
+            .where("id", "=", targetUserId)
+            .executeTakeFirst();
 
-      await db.transaction().execute(async (trx) => {
+          if (targetUser?.is_active !== true) {
+            throw new ForbiddenError(ErrorCode.INVALID_TARGET_USER);
+          }
+        }
+
+        // Skip DB write if assignment is already in the desired state
+        if (ticket.assigned_to === targetUserId) return false;
+
         await trx
           .updateTable("tickets")
           .set({ assigned_to: targetUserId })
@@ -287,8 +289,10 @@ export function createAssignmentService(
             userId: ticket.assigned_to,
           });
         }
+        return true;
       });
 
+      if (!changed) return;
       deps?.onTicketChanged?.(ticketId);
     },
   };

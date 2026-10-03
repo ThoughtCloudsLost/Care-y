@@ -220,6 +220,22 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     );
   });
 
+  it("release reads the current assignee, not one from before a reassignment", async () => {
+    const ticketId = await insertTicket({ assignedTo: volunteerA });
+    await svc.assignTo(volunteerA, ticketId, volunteerB);
+
+    await expect(svc.release(volunteerA, ticketId)).rejects.toBeInstanceOf(
+      TicketError,
+    );
+
+    const ticket = await testDb.db
+      .selectFrom("tickets")
+      .select("assigned_to")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    expect(ticket.assigned_to).toBe(volunteerB);
+  });
+
   it("release does NOT trigger auto-assignment", async () => {
     const ticketId = await insertTicket({ assignedTo: volunteerA });
     await svc.release(volunteerA, ticketId);
@@ -335,6 +351,24 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     await expect(
       svc.assignTo(volunteerA, ticketId, crypto.randomUUID() as UserId),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("assignTo unassign names the assignee the previous call left", async () => {
+    const ticketId = await insertTicket();
+    await svc.assignTo(volunteerA, ticketId, volunteerA);
+    await svc.assignTo(volunteerA, ticketId, volunteerB);
+    await svc.assignTo(volunteerA, ticketId, null);
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "volunteer_unassigned")
+      .execute();
+    expect(followups).toHaveLength(1);
+    const params = followups[0]!.event_params as { userId: string };
+    expect(params.userId).toBe(volunteerB);
   });
 
   // --- a failed system follow-up rolls back the assignment ---

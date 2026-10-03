@@ -1264,16 +1264,17 @@ export function createTicketService(
         return toRecord(existing);
       }
 
-      // Load prior values for fields that need before/after comparison.
-      // The access check does not return the row, so one select is needed.
-      const prior = await db
-        .selectFrom("tickets")
-        .select(["priority", "queue_id"])
-        .where("id", "=", input.ticketId)
-        .executeTakeFirst();
-      if (!prior) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-
       const row = await db.transaction().execute(async (trx) => {
+        // Lock the row so the from values and the unchanged checks come
+        // from the row this write replaces.
+        const prior = await trx
+          .selectFrom("tickets")
+          .select(["priority", "queue_id"])
+          .where("id", "=", input.ticketId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!prior) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+
         const updated = await trx
           .updateTable("tickets")
           .set(updates)

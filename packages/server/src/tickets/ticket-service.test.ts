@@ -639,6 +639,58 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(followups).toHaveLength(0);
   });
 
+  it("update records the priority the previous update left as the from value", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.update(userId, { ticketId, priority: "high" });
+    await svc.update(userId, { ticketId, priority: "urgent" });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "priority_changed")
+      .orderBy("created_at", "asc")
+      .execute();
+    expect(followups).toHaveLength(2);
+    const params = followups[1]!.event_params as { from: string; to: string };
+    expect(params.from).toBe("high");
+    expect(params.to).toBe("urgent");
+  });
+
+  it("update records the queue the previous update left as the from value", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const queue2 = await createTestQueue(testDb.db, {
+      label: "Target-Q-" + crypto.randomUUID().slice(0, 8),
+    });
+    const queue3 = await createTestQueue(testDb.db, {
+      label: "Target-Q-" + crypto.randomUUID().slice(0, 8),
+    });
+    // Membership of queue 2 keeps the second update past the access check
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queue2.id, user_id: userId })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    await svc.update(userId, { ticketId, queueId: queue2.id });
+    await svc.update(userId, { ticketId, queueId: queue3.id });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "queue_changed")
+      .orderBy("created_at", "asc")
+      .execute();
+    expect(followups).toHaveLength(2);
+    const params = followups[1]!.event_params as { from: string; to: string };
+    expect(params.from).toBe(queue2.id);
+    expect(params.to).toBe(queue3.id);
+  });
+
   // --- Key wrap read path ---
 
   async function insertKeyWrap(
