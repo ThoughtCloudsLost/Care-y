@@ -98,6 +98,18 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
+// jsdom lacks IntersectionObserver.
+if (typeof globalThis.IntersectionObserver === "undefined") {
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
+}
+
 const baseArticle = {
   id: "article-001",
   categoryId: "cat-001",
