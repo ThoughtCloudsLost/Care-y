@@ -27,7 +27,6 @@ import type { PendingClient } from "../tickets/ticket-service.js";
 import type { CallTracker } from "../telephony/call-tracker.js";
 import { generateTwilioAccessToken } from "../telephony/twilio-token.js";
 import type { CallerIdResolver } from "../telephony/phone-resolver.js";
-import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import { isE164Buffer } from "../telephony/phone-utils.js";
 import { getStrings } from "../notifications/i18n.js";
 import { createOrgConfigService } from "../org/org-config-service.js";
@@ -45,7 +44,7 @@ import {
   type OrgResolver,
 } from "./relay-utils.js";
 import { readFormBody } from "./webhooks.js";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import type { EmailSender } from "../email/email-sender.js";
 import type { OrgEmailBranding } from "../notifications/email.js";
 import type { ReplyTokenHasher } from "../crypto/field-encryptor.js";
@@ -57,7 +56,7 @@ import type {
   E164,
   TicketId,
   CallSid,
-  PhoneHash,
+  PhoneMatchHash,
   StoredProviderId,
 } from "@care-y/shared";
 import {
@@ -74,6 +73,7 @@ import {
   resolveClientEmail,
 } from "../clients/contact-resolution.js";
 import { buildEmailEnvelope } from "../email/email-relay-service.js";
+import { createPhoneLookupService } from "../clients/phone-lookup-service.js";
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -878,73 +878,42 @@ async function handlePhoneLookup(
     // This is an opaque hash value, not PII, so extractStringField is safe.
     const rawPhoneMatchHash = extractStringField(rawBody, "phoneMatchHash");
     const HEX128_RE = /^[0-9a-f]{128}$/;
-    let phoneMatchHash: string | null = null;
+    let phoneMatchHash: PhoneMatchHash | null = null;
     if (rawPhoneMatchHash !== null) {
       if (!HEX128_RE.test(rawPhoneMatchHash)) {
         sendRelayError(res, 400, "INVALID_PHONE_MATCH_HASH");
         return;
       }
-      phoneMatchHash = rawPhoneMatchHash;
+      phoneMatchHash = phoneMatchHashSchema.parse(rawPhoneMatchHash);
     }
 
-    // Derive hash + OPS-encrypted phone in a tight scope so the JS string
-    // reference drops before the await calls below. The string itself is
-    // immutable and persists until GC (accepted residual risk, same as SMS
-    // relay). Scoping minimizes the number of closures that capture it.
-    let phoneHash: PhoneHash;
-    let opsEncryptedPhone: Buffer;
-    {
-      const phoneStr = phoneBuf.toString("utf-8");
-      phoneHash = deps.indexer.hashPhone(phoneStr, session.orgId);
-      opsEncryptedPhone = deps.fieldEncryptor.encrypt(phoneStr);
-    }
-
-    const phoneRepo = createPhoneRepository(tenantDb);
-    const existingPhone = await phoneRepo.findByHash(phoneHash);
-
-    if (existingPhone) {
-      const client = await tenantDb
-        .selectFrom("clients")
-        .select(["id", "encrypted_alias"])
-        .where("phone_id", "=", existingPhone.id)
-        .where("merged_into", "is", null)
-        .executeTakeFirst();
-
-      if (client) {
-        const openTicket = await tenantDb
-          .selectFrom("tickets")
-          .select("id")
-          .where("client_id", "=", client.id)
-          .where("status", "=", "open")
-          .executeTakeFirst();
-
-        // Existing client found: zero the pre-computed OPS-encrypted phone
-        // since we won't need it for a pending token.
-        opsEncryptedPhone.fill(0);
-
-        sendJsonResponse(res, 200, {
-          found: true,
-          clientId: client.id,
-          encryptedAlias: client.encrypted_alias.toString("base64url"),
-          openTicketId: openTicket?.id ?? null,
-        });
-        return;
-      }
-    }
-
-    // No match: store pre-computed hash + OPS-encrypted phone in pending map.
-    const token = randomUUID();
-    deps.pendingClients.set(token, {
-      phoneHash,
-      opsEncryptedPhone,
-      phoneMatchHash:
-        phoneMatchHash === null
-          ? null
-          : phoneMatchHashSchema.parse(phoneMatchHash),
+    const phoneLookup = createPhoneLookupService({
+      db: tenantDb,
+      indexer: deps.indexer,
+      encryptor: deps.fieldEncryptor,
+      orgId: session.orgId,
       orgSchema: session.orgSchema,
-      createdAt: Date.now(),
+      pendingClients: deps.pendingClients,
     });
 
+    // The service converts the Buffer to a string for hashing and encryption
+    // (accepted residual risk documented there); phoneBuf is zeroed in finally.
+    const lookup = await phoneLookup.lookupPhone(phoneBuf);
+
+    if (lookup.found) {
+      sendJsonResponse(res, 200, {
+        found: true,
+        clientId: lookup.clientId,
+        encryptedAlias: lookup.encryptedAlias.toString("base64url"),
+        openTicketId: lookup.openTicketId,
+      });
+      return;
+    }
+
+    const token = phoneLookup.storePendingClient(
+      lookup.pending,
+      phoneMatchHash,
+    );
     sendJsonResponse(res, 200, {
       found: false,
       token,
