@@ -110,6 +110,12 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     return new Set([...carriedMatchIds, ...(contentMatchIds ?? [])]);
   });
   const hasCapability = $derived(providerHasFullSearch(options.providerId));
+  // Another surface's run over a different scope (the global search, or
+  // this page under other filters) is searching on the provider. Starting
+  // this page's run would replace it and abort it.
+  const foreignRunSearching = $derived(
+    fsState?.status === "searching" && fsState.scopeKey !== currentScopeKey(),
+  );
 
   const status = $derived.by((): DeepSearchStatus => {
     if (phase === "fetching" || phase === "content") return "searching";
@@ -158,6 +164,37 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   }
 
   /**
+   * True unless the provider state belongs to another surface's run, which
+   * a reset would abort. With no state there is nothing to abort.
+   */
+  function ownsProviderState(): boolean {
+    return untrack(
+      () => fsState === undefined || fsState.scopeKey === runScopeKey,
+    );
+  }
+
+  /**
+   * Wait for another scope's run to settle instead of replacing it. The
+   * pending trigger starts this run once it has; a term change drops it.
+   */
+  function deferBehindForeignRun(term: string): void {
+    searchTerm = term;
+    runScopeKey = null;
+    phase = "idle";
+    pendingTrigger = true;
+    pendingFromRerun = true;
+  }
+
+  /**
+   * The derived read through a call, so the check after the page fetch's
+   * awaits is not narrowed by the one before them: another surface can
+   * start a run while the pages are fetching.
+   */
+  function foreignRunHoldsProvider(): boolean {
+    return foreignRunSearching;
+  }
+
+  /**
    * Resolve once no page fetch is in flight. Also gives up if the run was
    * abandoned mid-wait (term changed, overlay closed), so a stale trigger
    * cannot keep polling after its phase was reset.
@@ -177,6 +214,10 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     if (phase !== "idle") return;
     const term = options.overlay.term ?? "";
     if (term.length < 2) return;
+    if (foreignRunSearching) {
+      deferBehindForeignRun(term);
+      return;
+    }
     const run = ++runToken;
     const superseded = (): boolean => run !== runToken;
 
@@ -222,25 +263,44 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     // already there. A run over another scope covers a different set.
     if (fsState?.status === "done" && fsState.scopeKey === runScopeKey) {
       finishRun();
+    } else if (foreignRunHoldsProvider()) {
+      // Another scope's run started while the pages were fetching.
+      deferBehindForeignRun(term);
     } else {
+      stoppedSearched = 0;
+      stoppedTotal = 0;
       phase = "content";
       runFullSearchForProvider(options.providerId, term, runScope);
     }
   }
 
-  // Settle the content phase when the provider's run completes or stops.
+  // Settle the content phase when this page's provider run completes or
+  // stops. A state under another scope key means another surface's run
+  // replaced this one and discarded its results, during the content phase
+  // or after done: the run ends as stopped with the counts it last
+  // reported, and is not restarted on its own.
   $effect(() => {
+    if (phase !== "content" && phase !== "done") return;
+    if (fsState === undefined) return;
+    if (fsState.scopeKey !== runScopeKey) {
+      untrack(() => {
+        stop(stoppedSearched, stoppedTotal);
+      });
+      return;
+    }
+    stoppedSearched = phase === "done" ? fsState.total : fsState.searched;
+    stoppedTotal = fsState.total;
     if (phase !== "content") return;
-    if (fsState?.status === "done") {
+    if (fsState.status === "done") {
       finishRun();
-    } else if (fsState?.status === "incomplete") {
+    } else if (fsState.status === "incomplete") {
       stop(fsState.searched, fsState.total);
     }
   });
 
   function retryStoppedRun(): void {
     if (phase !== "error") return;
-    resetFullSearchForProvider(options.providerId);
+    if (ownsProviderState()) resetFullSearchForProvider(options.providerId);
     phase = "idle";
     void doTrigger();
   }
@@ -250,7 +310,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- immutable snapshot; reactivity comes from reassigning the state
     carriedMatchIds = new Set([...carriedMatchIds, ...(contentMatchIds ?? [])]);
     runToken++;
-    resetFullSearchForProvider(options.providerId);
+    if (ownsProviderState()) resetFullSearchForProvider(options.providerId);
     phase = "idle";
     runScopeKey = null;
     pendingTrigger = true;
@@ -274,7 +334,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     if (searchTerm == null) return;
     if (!options.overlay.active || options.overlay.term !== searchTerm) {
       phase = "idle";
-      resetFullSearchForProvider(options.providerId);
+      if (ownsProviderState()) resetFullSearchForProvider(options.providerId);
       if (pendingFromRerun) {
         pendingTrigger = false;
         pendingFromRerun = false;
@@ -294,6 +354,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
       options.overlay.term.length >= 2 &&
       options.matchCount() === 0 &&
       phase === "idle" &&
+      !foreignRunSearching &&
       !options.isInitialLoading()
     ) {
       void doTrigger();
@@ -304,8 +365,14 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   // change): run once the initial data has loaded. A rerun's pending
   // trigger is dropped when the term changes; a navigation's survives
   // until the data loads.
+  // It also waits while another scope's run is searching on the provider.
   $effect(() => {
-    if (pendingTrigger && !options.isInitialLoading() && phase === "idle") {
+    if (
+      pendingTrigger &&
+      !options.isInitialLoading() &&
+      phase === "idle" &&
+      !foreignRunSearching
+    ) {
       pendingTrigger = false;
       void doTrigger();
     }

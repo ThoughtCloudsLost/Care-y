@@ -23,6 +23,12 @@
     getFullSearchStates().filter((s) => s.scopeKey === UNSCOPED_SCOPE_KEY),
   );
   const isSearching = $derived(states.some((s) => s.status === "searching"));
+  // A run on any provider, scoped or not, holds it: starting the global
+  // run over a page's scoped run would abort it. The auto-trigger waits
+  // until every run has settled.
+  const anyRunSearching = $derived(
+    getFullSearchStates().some((s) => s.status === "searching"),
+  );
   const isDone = $derived(
     states.length > 0 && states.every((s) => s.status === "done"),
   );
@@ -48,7 +54,7 @@
       query.length >= 2 &&
       !hasAnyResults &&
       !anyGroupLoading &&
-      !isSearching &&
+      !anyRunSearching &&
       !isDone &&
       !anyIncomplete &&
       totalCachedItems > 0
