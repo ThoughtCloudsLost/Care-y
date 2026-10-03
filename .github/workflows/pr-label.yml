@@ -10,9 +10,10 @@ name: PR label
 # nobody picks at PR time. A fix, feat, docs or perf commit is a change a
 # reader of the notes can meet. A test, ci, chore, build, refactor or style
 # commit is not.
-# A label that contradicts the commits fails the check, and a branch that
-# mixes product commits with test-only commits cannot carry one honest
-# label, so the check also keeps pull requests to one concern.
+# A label that contradicts the commits fails the check. A fix with its own
+# test commits is one concern and passes under bug; a branch of test-only
+# commits cannot pass under bug, and product commits cannot hide under
+# changelog:skip, which is what keeps the notes honest.
 #
 # The check reruns when labels change, so a wrong label is fixed by
 # relabelling, not by pushing.
@@ -53,9 +54,17 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          # Commit subjects on the pull request, merge commits left out.
-          subjects=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits" --paginate \
-            --jq '.[].commit.message | split("\n")[0]' | grep -v '^Merge ' || true)
+          # Commit subjects on the pull request. The API call fails the job on
+          # its own (no pipe, no fallback), so an outage never reads as "no
+          # commits". Merge commits are left out afterwards; grep's no-match
+          # exit is the one thing swallowed.
+          all_subjects=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits" --paginate \
+            --jq '.[].commit.message | split("\n")[0]')
+          if [ "$(printf '%s\n' "$all_subjects" | grep -c .)" -ge 250 ]; then
+            echo "::error::The commits endpoint stops at 250 commits, so this pull request cannot be checked whole. Split it."
+            exit 1
+          fi
+          subjects=$(printf '%s\n' "$all_subjects" | grep -v '^Merge ' || true)
 
           product=0; fix=0; feat=0; docs=0; housekeeping=0
           while IFS= read -r subject; do
@@ -66,6 +75,8 @@ jobs:
               perf) product=1; fix=1; feat=1 ;;
               feat) product=1; feat=1 ;;
               docs) product=1; docs=1 ;;
+              # A revert undoes a shipped change, which a reader meets as a fix.
+              revert) product=1; fix=1 ;;
               test|ci|chore|build|refactor|style) housekeeping=1 ;;
               *) echo "::error::Commit subject has no conventional type: $subject"; exit 1 ;;
             esac
