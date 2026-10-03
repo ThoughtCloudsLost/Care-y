@@ -27,9 +27,11 @@
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<Record> proxy assignments; types are correct */
   /* eslint-disable @typescript-eslint/strict-boolean-expressions -- $derived proxy values flagged as any */
   import { List, ListInput, Preloader } from "konsta/svelte";
+  import { isTRPCClientError } from "@trpc/client";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
   import {
     ticketPrioritySchema,
     newTicketId,
@@ -177,8 +179,17 @@
           ? { clientId: selection.clientId }
           : { clientToken: selection.token }),
       });
-    } catch {
-      errors = { form: m.ticket_new_error_encrypt_failed(withTerms()) };
+    } catch (err: unknown) {
+      // The two lookups run before any plaintext is encrypted, so a
+      // failed request reads as a connection problem and leaves the form
+      // filled in for a retry. Only the worker reports encryption failure.
+      if (isTRPCClientError(err)) {
+        errors = { form: m.error_network() };
+      } else if (err instanceof CryptoWorkerError) {
+        errors = { form: m.ticket_new_error_encrypt_failed(withTerms()) };
+      } else {
+        throw err;
+      }
     } finally {
       encrypting = false;
     }
