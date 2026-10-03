@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import type { Mock } from "vitest";
 import {
   render,
@@ -216,6 +216,12 @@ describe("NewTicketForm", () => {
   });
 
   describe("submit failures", () => {
+    // Load the mocked picker once up front. The form imports it lazily,
+    // and on a cold cache the first load can outlast the findBy timeout.
+    beforeAll(async () => {
+      await import("$lib/components/inputs/ClientSelect.svelte");
+    });
+
     interface CreateTarget {
       openTicketId: string | null;
       reopenTicketId: string | null;
