@@ -1478,7 +1478,6 @@
   "ticket_call_error_no_phone": "⟦Nò phònè nùmbèr òn fìlè fòr thìs  ••••••••••{client}. •⟧",
   "exposure_hint_sms": "⟦SMS ìs nòt èncryptèd. Yòùr phònè pròvìdèr càn rèàd ìt. Kèèp sènsìtìvè dètàìls ìn thè èncryptèd chàt. ••••••••••••••••••••••••••••••⟧",
   "exposure_hint_call": "⟦Thìs càll ròùtès thròùgh yòùr phònè pròvìdèr. Thèy càn hèàr thè càll. Kèèp sènsìtìvè dètàìls ìn thè èncryptèd chàt. •••••••••••••••••••••••••••••••••••⟧",
-  "exposure_hint_email": "⟦Èmàìl ìs thè èàsìèst chànnèl tò fàkè. Ànyònè whò còntròls thè sèndèr's màìlbòx, òr prètènds tò, càn sènd mèssàgès thàt lòòk rèàl. Vèrìfy ànythìng ìmpòrtànt thròùgh ànòthèr chànnèl. ••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧",
   "exposure_hint_dismiss": "⟦Gòt ìt ••⟧",
   "call_indicator_label": "⟦Càll ìn prògrèss •••••⟧",
   "onboarding_step_account": "⟦Àccòùnt •••⟧",
