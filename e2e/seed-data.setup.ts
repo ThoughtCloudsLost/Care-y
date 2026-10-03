@@ -208,10 +208,19 @@ async function createLockedTicket(
     // A fresh admin session runs the auto-wrap for accounts that have
     // keys but no org key yet. The volunteer's key gate polls every 5s.
     await login(adminPage);
+    // The shell renders before the org key arrives, and the new-ticket
+    // sheet's phone lookup throws without that key before it sends anything
+    // (orgKeyManager.phoneMatchHash). A queue name is sealed to the org
+    // key, so its plaintext on the volunteer's dashboard is the signal that
+    // the key is loaded, not the tablist.
     await volPage.locator('[role="tablist"]').waitFor({
       state: "attached",
       timeout: CRYPTO_TIMEOUT * 2,
     });
+    await volPage
+      .getByText("Crisis")
+      .first()
+      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT * 2 });
     console.log("[e2e-seed] second seed account received the org key");
 
     const adminId = await currentUserId(adminPage);
