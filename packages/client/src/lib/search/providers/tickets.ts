@@ -365,8 +365,13 @@ export function createTicketSearchProvider(
         } catch (err) {
           // Record how far the run got before the registry marks it
           // incomplete: nothing was content-searched yet, and the total is
-          // the server's count when known.
-          state.total = deps.getTotalItemCount?.() ?? totalLoaded;
+          // the server's count when known for an unscoped run, and the
+          // loaded count for a scoped one, since the server count totals the
+          // whole org.
+          state.total =
+            scope === undefined
+              ? (deps.getTotalItemCount?.() ?? totalLoaded)
+              : totalLoaded;
           state.searched = 0;
           onProgress();
           throw err;

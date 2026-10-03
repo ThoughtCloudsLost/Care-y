@@ -165,6 +165,10 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   }
 
   async function doTrigger(): Promise<void> {
+    // Any start consumes a pending trigger. A scope rerun sets the flag, but
+    // on the zero-match path the auto-trigger starts the run first; a flag
+    // left set would start an unprompted run for the next term.
+    pendingTrigger = false;
     if (phase !== "idle") return;
     const term = options.overlay.term ?? "";
     if (term.length < 2) return;

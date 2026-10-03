@@ -183,6 +183,7 @@ interface Harness {
   setLoaded: (count: number) => void;
   setFetchingNext: (value: boolean) => void;
   setScope: (value: unknown) => void;
+  setLocalMatchCount: (count: number) => void;
   destroy: () => void;
 }
 
@@ -197,8 +198,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
   let loaded = $state(options.loaded ?? 0);
   let fetchingNext = $state(options.fetchingNext ?? false);
   let scope = $state<unknown>(options.scope);
-  // Never changes mid-test, so plain (non-reactive) is sufficient.
-  const localMatchCount = options.localMatchCount ?? 5;
+  let localMatchCount = $state(options.localMatchCount ?? 5);
 
   const pendingFetches: Array<{
     resolve: (result: FetchResult) => void;
@@ -281,6 +281,9 @@ function createHarness(options: HarnessOptions = {}): Harness {
     },
     setScope(value) {
       scope = value;
+    },
+    setLocalMatchCount(count) {
+      localMatchCount = count;
     },
     destroy,
   };
@@ -692,6 +695,28 @@ describe("createDeepSearch", () => {
       await settle();
       expect(p.runs).toHaveLength(1); // consumed once
     });
+
+    it("runs a navigation's deep search for a new term that has title matches, once", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ localMatchCount: 3 });
+
+      h.overlay.enter("alpha");
+      await settle();
+      h.ds.trigger();
+      await settle();
+      p.runs[0]?.finish({ searched: 4, total: 4 });
+      await settle();
+      expect(h.ds.status).toBe("done");
+
+      h.overlay.enter("beta");
+      h.ds.scheduleFromNavigation();
+      await settle();
+      expect(p.runs).toHaveLength(2);
+      expect(p.runs[1]?.query).toBe("beta");
+
+      await settle();
+      expect(p.runs).toHaveLength(2); // consumed once
+    });
   });
 
   describe("teardown", () => {
@@ -1059,6 +1084,42 @@ describe("createDeepSearch", () => {
       expect(p.runs).toHaveLength(2);
       expect(p.runs[1]!.scope).toEqual({ queueIds: ["q2"] });
       expect(h.ds.status).toBe("searching");
+    });
+
+    it("starts one rerun with zero title matches and leaves no trigger for the next term", async () => {
+      const p = registerFullSearchProvider();
+      p.reset.mockImplementation(() => {
+        p.contentMatchIds.clear();
+      });
+      const h = createHarness({
+        hasNext: false,
+        localMatchCount: 0,
+        scope: { queueIds: ["q1"] },
+      });
+
+      h.overlay.enter("harbor");
+      await settle();
+      expect(p.runs).toHaveLength(1);
+      p.runs[0]!.finish({ searched: 4, total: 4 });
+      await settle();
+      expect(h.ds.status).toBe("done");
+
+      h.setScope({ queueIds: ["q2"] });
+      await settle();
+      await settle();
+      expect(p.runs).toHaveLength(2);
+      expect(p.runs[1]!.scope).toEqual({ queueIds: ["q2"] });
+
+      p.runs[1]!.finish({ searched: 6, total: 6 });
+      await settle();
+
+      h.setLocalMatchCount(2);
+      h.overlay.setTerm("beacon");
+      await settle();
+      await settle();
+
+      expect(p.runs).toHaveLength(2);
+      expect(h.ds.status).toBe("idle");
     });
 
     it("reruns when the filters change after the run stopped, and keeps carried matches if the rerun stops too", async () => {

@@ -643,6 +643,27 @@ describe("ticket fullSearch (two-phase)", () => {
     expect(state.searched).toBe(0);
   });
 
+  it("reports the loaded count as the total when a scoped run's listing fails", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) =>
+      makeRawTicket({ id: `p1-${i}`, keyWrap: KW }),
+    );
+    const provider = createFullSearchProvider({
+      listAllPages: [page1, page1],
+      decryptTitle: () => "Unrelated topic",
+      failListAllAt: 1,
+      getTotalItemCount: () => 900,
+    });
+
+    const state = makeState();
+    const scope: TicketSearchScope = { queueIds: ["q1"] };
+    await expect(
+      provider.fullSearch!("Housing", state, vi.fn(), liveSignal(), scope),
+    ).rejects.toThrow("Network error");
+
+    expect(state.total).toBe(100);
+    expect(state.searched).toBe(0);
+  });
+
   it("content-searches in chunks of 500 and counts each settled chunk", async () => {
     const nonMatching = Array.from({ length: 1200 }, (_, i) =>
       makeRawTicket({ id: `n-${i}`, keyWrap: KW }),
