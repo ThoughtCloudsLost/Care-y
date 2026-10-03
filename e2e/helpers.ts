@@ -139,6 +139,11 @@ export interface LoginOptions {
    *  wrapped_org_keys row until the seed-data setup calls devSeedOrgKey;
    *  only that setup should pass this. */
   readonly allowOrgKeyWait?: boolean;
+  /** The password to set when the wizard asks the account to replace the
+   *  temporary one an administrator chose (every administrator-created
+   *  account, which includes the seed volunteers on a fresh database).
+   *  Without it that step fails loudly instead of waiting out a timeout. */
+  readonly replacementPassword?: string;
 }
 
 /** First-attempt bound on the credential leg. Timed full runs put healthy
@@ -327,12 +332,12 @@ async function loginAttempt(
   );
 
   if (result === "onboarding") {
-    await completeOnboarding(page, username);
+    await completeOnboarding(page, username, password, options);
   } else if (result === "2fa-challenge") {
     await completeTwofaChallenge(page, username);
     // 2FA may redirect to /complete if onboarding is still needed.
     if (page.url().endsWith("/complete")) {
-      await completeOnboarding(page, username);
+      await completeOnboarding(page, username, password, options);
     }
   }
   // result === "done": already on /, nothing to do
@@ -366,59 +371,94 @@ async function loginAttempt(
 
 /**
  * Complete the post-login onboarding wizard on /complete.
- * Steps are conditional: briefing only if not yet seen, 2FA only if not enrolled.
+ *
+ * The wizard shows whichever steps are still needed, in order: replace a
+ * temporary password (administrator-created accounts), the security
+ * briefing (four sub-pages), TOTP enrollment; or none, straight to /. Each
+ * round races the four outcomes and handles the one that appears, instead
+ * of sleeping and sampling isVisible(): isVisible() ignores its timeout
+ * option and answers at once, so a step that has not painted yet reads as
+ * "not needed" and its clicks are skipped (2026-10-03, a fresh volunteer's
+ * first login on a CI runner). Every spec's login runs through here.
  * The wizard nav renders Next/Confirm as Konsta Link elements in the navbar.
  */
-async function completeOnboarding(page: Page, username: string): Promise<void> {
-  // Wait for the onboarding content to load.
-  await page.waitForTimeout(2_000);
-  if (page.url().endsWith("/")) return;
-
-  // Step 1: Security briefing (4 sub-pages, if present)
-  // Heading: "How CARE-Y Protects Your Data"
+async function completeOnboarding(
+  page: Page,
+  username: string,
+  password: string,
+  options: LoginOptions,
+): Promise<void> {
+  const passwordHeading = page.getByText("Choose Your Own Password");
   const briefingHeading = page.getByText("How CARE-Y Protects Your Data");
-  if (await briefingHeading.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    // Click through 3 sub-pages via the wizard navbar's "Next" link.
-    // The onboarding layout marks its navbar with role="banner".
-    for (let i = 0; i < 3; i++) {
-      await page.getByRole("banner").getByText("Next").click();
-      await page.waitForTimeout(300);
-    }
-    // Last page: "Confirm"
-    await page.getByRole("banner").getByText("Confirm").click();
-    await page.waitForTimeout(1_000);
-  }
-
-  if (page.url().endsWith("/")) return;
-
-  // Step 2: TOTP enrollment (if present)
-  // Heading: "Set Up Two-Factor Authentication"
-  //
-  // Race the heading against the dashboard redirect that means onboarding
-  // finished without this step. Sampling isVisible() instead would return
-  // immediately (its timeout option is ignored), so a wizard step that has
-  // not painted yet reads as "already enrolled" and enrollment is skipped
-  // with no assertion to catch it. Every spec's login runs through here.
   const twofaHeading = page.getByText("Set Up Two-Factor Authentication");
-  const enrollmentShown = await Promise.race([
-    twofaHeading
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
-      .then(() => true)
-      .catch(() => false),
-    page
-      .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
-      .then(() => false)
-      .catch(() => false),
-  ]);
+  const nextStep = async (): Promise<
+    "password" | "briefing" | "2fa" | "done"
+  > =>
+    Promise.race([
+      passwordHeading
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(() => "password" as const),
+      briefingHeading
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(() => "briefing" as const),
+      twofaHeading
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(() => "2fa" as const),
+      page
+        .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
+        .then(() => "done" as const),
+    ]);
 
-  if (enrollmentShown) {
+  for (;;) {
+    const step = await nextStep();
+    console.log(`[onboarding] step: ${step}`);
+    if (step === "done") return;
+
+    if (step === "password") {
+      if (options.replacementPassword === undefined) {
+        throw new E2eError(
+          `${username} must replace its temporary password; pass replacementPassword to login()`,
+        );
+      }
+      await page.getByLabel("Current password").fill(password);
+      await page
+        .getByLabel("New password (16+ characters)")
+        .fill(options.replacementPassword);
+      await page
+        .getByLabel("Confirm new password")
+        .fill(options.replacementPassword);
+      await page.getByRole("banner").getByText("Next").click();
+      // The change re-wraps the account's keys before the step leaves.
+      await passwordHeading.waitFor({
+        state: "hidden",
+        timeout: CRYPTO_TIMEOUT,
+      });
+      continue;
+    }
+
+    if (step === "briefing") {
+      // Click through 3 sub-pages via the wizard navbar's "Next" link.
+      // The onboarding layout marks its navbar with role="banner".
+      for (let i = 0; i < 3; i++) {
+        await page.getByRole("banner").getByText("Next").click();
+        await page.waitForTimeout(300);
+      }
+      // Last page: "Confirm"
+      await page.getByRole("banner").getByText("Confirm").click();
+      await briefingHeading.waitFor({
+        state: "hidden",
+        timeout: CRYPTO_TIMEOUT,
+      });
+      continue;
+    }
+
+    // step === "2fa"
     await enrollTotp(page, username);
-
     // After enrollment, "Next" in the wizard navbar finishes onboarding
     await page.getByRole("banner").getByText("Next").click();
+    await page.waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT });
+    return;
   }
-
-  await page.waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT });
 }
 
 /**
@@ -850,7 +890,15 @@ export async function createTicket(
   // search dropdown, which opens once the search field has input.
   const clientInput = sheet.getByPlaceholder(/search by alias/i);
   await clientInput.click();
+  // The dropdown re-renders when the search answers; let it settle before
+  // reaching for the action at its foot, so the click lands on the
+  // rendered button and not on content that is being replaced.
+  const searchSettled = page.waitForResponse(
+    (r) => r.url().includes("tickets.searchClients"),
+    { timeout: CRYPTO_TIMEOUT },
+  );
   await clientInput.pressSequentially("new", { delay: 30 });
+  await searchSettled;
   const createClientBtn = sheet.getByRole("button", { name: /^create new/i });
   await createClientBtn.waitFor({ state: "visible", timeout: 10_000 });
   await createClientBtn.click();
@@ -866,10 +914,14 @@ export async function createTicket(
       r.request().method() === "POST",
     { timeout: CRYPTO_TIMEOUT },
   );
-  await phoneInput.fill(nextCallerPhone());
+  const callerPhone = nextCallerPhone();
+  await phoneInput.fill(callerPhone);
+  await expect(phoneInput).toHaveValue(callerPhone);
+  // Blur the phone field on purpose rather than as a side effect of the
+  // next fill, so the lookup starts whatever the sheet does with focus.
+  await phoneInput.press("Tab");
 
-  // Fill the rest of the form. Clicking the title field also blurs the
-  // phone field, which starts the lookup.
+  // Fill the rest of the form.
   await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
   const lookup = await lookupResponse;
   if (lookup.status() !== 200) {

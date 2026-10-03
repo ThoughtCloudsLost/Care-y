@@ -47,7 +47,13 @@ const E2E_ORG_NAME = "E2E Test Org";
  * the dev password (SEED_USERS in packages/client/src/lib/dev/seed-replay.ts).
  */
 const LOCKED_TICKET_VOLUNTEER = "vol.crisis";
+/** RoleId.VOLUNTEER and Permission.VIEW_CLIENT_PII in packages/shared/src/roles.ts;
+ *  the e2e project does not import the shared package. */
+const VOLUNTEER_ROLE_ID = "dXwG0zR9BtJp";
+const VIEW_CLIENT_PII = "view_client_pii";
 const VOLUNTEER_PASSWORD = "dev-password-1234!";
+/** What the volunteer's first login sets in place of the temporary password. */
+const REPLACED_VOLUNTEER_PASSWORD = "dev-password-1234!-chosen";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -87,10 +93,12 @@ async function callTrpc(
     );
   }
   const body: unknown = JSON.parse(outcome.text);
-  if (!isRecord(body) || !isRecord(body.result) || !("data" in body.result)) {
+  if (!isRecord(body) || !isRecord(body.result)) {
     throw new E2eError(`${procedure} returned an unexpected shape`);
   }
-  return body.result.data;
+  // A mutation that returns nothing (removeQueueMember, addQueueMember)
+  // serialises as a result with no data key.
+  return "data" in body.result ? body.result.data : undefined;
 }
 
 /** The signed-in account's user id, from auth.me. */
@@ -161,7 +169,7 @@ async function createLockedTicket(
   browser: Browser,
   adminPage: Page,
 ): Promise<void> {
-  const volContext = await browser.newContext();
+  let volContext = await browser.newContext();
   let volContextOpen = true;
   const closeVolContext = async (): Promise<void> => {
     if (!volContextOpen) return;
@@ -169,26 +177,81 @@ async function createLockedTicket(
     await volContext.close();
   };
   try {
-    const volPage = await volContext.newPage();
-    await login(volPage, LOCKED_TICKET_VOLUNTEER, VOLUNTEER_PASSWORD, {
-      allowOrgKeyWait: true,
-    });
+    let volPage = await volContext.newPage();
+    // An administrator-created account replaces its temporary password at
+    // first sign-in. On a fresh database the replay's password is still the
+    // temporary one and the wizard asks for a new one; on a database that
+    // has been through this setup before, the replaced password is the one
+    // that works. Try the replaced password first, then fall back.
+    try {
+      await login(
+        volPage,
+        LOCKED_TICKET_VOLUNTEER,
+        REPLACED_VOLUNTEER_PASSWORD,
+        {
+          allowOrgKeyWait: true,
+        },
+      );
+    } catch (error) {
+      if (!(
+        error instanceof E2eError && error.message.startsWith("Login failed:")
+      )) {
+        throw error;
+      }
+      await login(volPage, LOCKED_TICKET_VOLUNTEER, VOLUNTEER_PASSWORD, {
+        allowOrgKeyWait: true,
+        replacementPassword: REPLACED_VOLUNTEER_PASSWORD,
+      });
+    }
     console.log("[e2e-seed] second seed account signed in");
 
-    // A fresh admin session runs the auto-wrap for accounts that have
-    // keys but no org key yet. The volunteer's key gate polls every 5s.
+    // A fresh admin session runs the auto-wrap for accounts that have keys
+    // but no org key yet. On a fresh database that wrap happens within
+    // seconds of the admin's login; on a database that has been through
+    // this before the volunteer is already wrapped and no call is made,
+    // which is what the catch below stands for.
+    const wrapped = adminPage
+      .waitForResponse((r) => r.url().includes("keys.wrapOrgKeyForUser"), {
+        timeout: CRYPTO_TIMEOUT,
+      })
+      .then(() => true)
+      .catch(() => false);
     await login(adminPage);
-    await volPage.locator('[role="tablist"]').waitFor({
-      state: "attached",
-      timeout: CRYPTO_TIMEOUT * 2,
-    });
-    console.log("[e2e-seed] second seed account received the org key");
+    console.log(
+      `[e2e-seed] admin auto-wrap ${(await wrapped) ? "ran" : "had nothing to do"}`,
+    );
+
+    // Only accounts that manage keys poll for an org key that arrives after
+    // sign-in (AppCryptoProvider); a volunteer loads it at sign-in or not at
+    // all. So the volunteer signs in again, in a fresh context, now that the
+    // wrap exists. A queue name is sealed to the org key, so its plaintext on
+    // the dashboard is the proof the key is loaded.
+    await closeVolContext();
+    volContext = await browser.newContext();
+    volContextOpen = true;
+    volPage = await volContext.newPage();
+    await login(volPage, LOCKED_TICKET_VOLUNTEER, REPLACED_VOLUNTEER_PASSWORD);
+    await volPage
+      .getByText("Crisis")
+      .first()
+      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT * 2 });
+    console.log("[e2e-seed] second seed account signed in with the org key");
 
     const adminId = await currentUserId(adminPage);
     const queueId = await crisisQueueId(adminPage);
     await callTrpc(adminPage, "tickets.removeQueueMember", {
       queueId,
       userId: adminId,
+    });
+    // Creating a ticket for a caller nobody has seen runs the phone lookup
+    // relay, which takes the client PII permission. The Volunteer role
+    // does not hold it by default, so the admin grants it to the role for
+    // this one creation and takes it back below. Whether volunteers should
+    // hold it is a product question, filed separately.
+    await callTrpc(adminPage, "auth.setRolePermission", {
+      roleId: VOLUNTEER_ROLE_ID,
+      permission: VIEW_CLIENT_PII,
+      enabled: true,
     });
     try {
       await createTicket(volPage, {
@@ -201,6 +264,11 @@ async function createLockedTicket(
       // Close before the admin rejoins. An open volunteer client could
       // backfill a wrap for the admin once the admin is a member again.
       await closeVolContext();
+      await callTrpc(adminPage, "auth.setRolePermission", {
+        roleId: VOLUNTEER_ROLE_ID,
+        permission: VIEW_CLIENT_PII,
+        enabled: false,
+      });
       await callTrpc(adminPage, "tickets.addQueueMember", {
         queueId,
         userId: adminId,
