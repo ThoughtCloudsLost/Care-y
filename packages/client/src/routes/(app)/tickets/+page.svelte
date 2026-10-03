@@ -119,6 +119,7 @@
   } from "$lib/tickets/resolve-volunteer.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import { createDeepSearch } from "$lib/search/deep-search.svelte.js";
+  import { ticketSearchScope } from "$lib/search/providers/tickets.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import TicketListOverlays from "./TicketListOverlays.svelte";
@@ -554,6 +555,8 @@
     totalCount: () =>
       filterStore.activeCount === 0 ? countsQuery.data?.total : undefined,
     matchCount: () => titleMatchIds.length,
+    // Scope the deeper search's fetch to the filters the list shows.
+    fullSearchScope: () => ticketSearchScope(filterStore.serverParams),
   });
 
   const searchMatches = $derived(
@@ -1225,6 +1228,10 @@
       ? m.search_deep_incomplete(
           withTerms({ searched: deepSearch.searched, total: deepSearch.total }),
         )
+      : undefined}
+    onclearfilters={filterStore.activeCount > 0 ? dispatch.clearAll : undefined}
+    clearFiltersLabel={filterStore.activeCount > 0
+      ? m.search_filter_scoped_clear(withTerms())
       : undefined}
   />
 {/snippet}

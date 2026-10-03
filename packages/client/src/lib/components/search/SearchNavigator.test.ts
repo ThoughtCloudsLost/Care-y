@@ -14,6 +14,8 @@ interface OverrideProps {
   deepSearchTotal?: number;
   ondeepsearchretry?: () => void;
   deepSearchIncompleteText?: string;
+  onclearfilters?: () => void;
+  clearFiltersLabel?: string;
 }
 
 function baseProps(overrides: OverrideProps = {}) {
@@ -60,5 +62,28 @@ describe("SearchNavigator", () => {
     });
 
     expect(queryByRole("button", { name: m.common_retry() })).toBeNull();
+  });
+
+  it("shows the filter-scope row with a clear button while filters are active", async () => {
+    const onclearfilters = vi.fn();
+    const { getByText, getByRole } = render(SearchNavigator, {
+      props: baseProps({
+        onclearfilters,
+        clearFiltersLabel: "Search all tickets",
+      }),
+    });
+
+    expect(getByText(m.search_filter_scoped_notice())).toBeDefined();
+
+    await fireEvent.click(getByRole("button", { name: "Search all tickets" }));
+    expect(onclearfilters).toHaveBeenCalledOnce();
+  });
+
+  it("renders no filter-scope row without a clear handler", () => {
+    const { queryByText } = render(SearchNavigator, {
+      props: baseProps(),
+    });
+
+    expect(queryByText(m.search_filter_scoped_notice())).toBeNull();
   });
 });

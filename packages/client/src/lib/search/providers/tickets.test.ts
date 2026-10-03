@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import type { RawCachedTicket, TicketSearchProviderDeps } from "./tickets.js";
-import { createTicketSearchProvider } from "./tickets.js";
+import type {
+  RawCachedTicket,
+  TicketSearchProviderDeps,
+  TicketSearchScope,
+} from "./tickets.js";
+import { createTicketSearchProvider, ticketSearchScope } from "./tickets.js";
+import type { TicketListServerParams } from "$lib/stores/filters.svelte.js";
 import type { CoverageState, FullSearchState } from "../types.js";
 import type * as Messages from "$lib/paraglide/messages.js";
 import type * as WithTermsModule from "$lib/terminology/with-terms.js";
@@ -354,6 +359,11 @@ describe("ticket fullSearch (two-phase)", () => {
     decryptTitle?: (id: string) => string | undefined;
     /** Runs on every listAll call, before the page is returned. */
     onListAll?: () => void;
+    /** Receives the arguments of every listAll call. */
+    onListAllArgs?: (
+      cursor: string | undefined,
+      scope: TicketSearchScope | undefined,
+    ) => void;
     /** listAll call index (0-based) that rejects instead of returning a page. */
     failListAllAt?: number;
     getTotalItemCount?: () => number | undefined;
@@ -373,7 +383,8 @@ describe("ticket fullSearch (two-phase)", () => {
       currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
       getTotalItemCount: overrides.getTotalItemCount,
-      listAll: vi.fn(async () => {
+      listAll: vi.fn(async (cursor?: string, scope?: TicketSearchScope) => {
+        overrides.onListAllArgs?.(cursor, scope);
         if (pageIndex === overrides.failListAllAt) {
           throw new Error("Network error");
         }
@@ -413,6 +424,58 @@ describe("ticket fullSearch (two-phase)", () => {
     expect(state.matchCount).toBeGreaterThanOrEqual(1);
     expect(state.total).toBe(101);
     expect(onProgress).toHaveBeenCalled();
+  });
+
+  it("passes its run's scope to every page fetch", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) =>
+      makeRawTicket({ id: `p1-${i}`, keyWrap: KW }),
+    );
+    const page2 = [makeRawTicket({ id: "p2-0", keyWrap: KW })];
+    const calls: {
+      cursor: string | undefined;
+      scope: TicketSearchScope | undefined;
+    }[] = [];
+
+    const provider = createFullSearchProvider({
+      listAllPages: [page1, page2],
+      decryptTitle: () => "Unrelated topic",
+      onListAllArgs: (cursor, scope) => {
+        calls.push({ cursor, scope });
+      },
+    });
+
+    const scope: TicketSearchScope = {
+      queueIds: ["q1"],
+      priorities: ["high"],
+    };
+    await provider.fullSearch!(
+      "Housing",
+      makeState(),
+      vi.fn(),
+      liveSignal(),
+      scope,
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.scope).toBe(scope);
+    expect(calls[1]?.scope).toBe(scope);
+    expect(calls[1]?.cursor).toBe("p1-99");
+  });
+
+  it("fetches unscoped when the run has no scope", async () => {
+    const scopes: (TicketSearchScope | undefined)[] = [];
+
+    const provider = createFullSearchProvider({
+      listAllPages: [[makeRawTicket({ id: "t1", keyWrap: KW })]],
+      decryptTitle: () => "Unrelated topic",
+      onListAllArgs: (_cursor, scope) => {
+        scopes.push(scope);
+      },
+    });
+
+    await provider.fullSearch!("Housing", makeState(), vi.fn(), liveSignal());
+
+    expect(scopes).toEqual([undefined]);
   });
 
   it("stops paginating as soon as its run is aborted", async () => {
@@ -703,6 +766,38 @@ describe("ticket fullSearch (two-phase)", () => {
 
     expect(state.matchCount).toBe(1);
     expect(contentSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe("ticketSearchScope", () => {
+  it("keeps the filter fields and drops sort and page size", () => {
+    const params: TicketListServerParams = {
+      statuses: ["open"],
+      onHold: false,
+      queueIds: ["q1"],
+      priorities: ["high"],
+      assignedTo: null,
+      createdAfter: "2026-01-01T00:00:00.000Z",
+      createdBefore: "2026-02-01T00:00:00.000Z",
+      sortBy: "priority",
+      sortDirection: "asc",
+      limit: 50,
+    };
+
+    const scope = ticketSearchScope(params);
+
+    expect(scope).toEqual({
+      statuses: ["open"],
+      onHold: false,
+      queueIds: ["q1"],
+      priorities: ["high"],
+      assignedTo: null,
+      createdAfter: "2026-01-01T00:00:00.000Z",
+      createdBefore: "2026-02-01T00:00:00.000Z",
+    });
+    expect(scope).not.toHaveProperty("sortBy");
+    expect(scope).not.toHaveProperty("sortDirection");
+    expect(scope).not.toHaveProperty("limit");
   });
 });
 

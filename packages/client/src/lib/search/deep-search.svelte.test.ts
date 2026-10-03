@@ -47,6 +47,8 @@ interface ProviderRun {
   readonly query: string;
   /** The registry's cancellation channel for this run. */
   readonly signal: AbortSignal;
+  /** The filter scope the caller handed to this run. */
+  readonly scope: unknown;
   /** Mutate progress fields and notify the registry. */
   progress: (
     patch: Partial<Pick<FullSearchState, "searched" | "total" | "matchCount">>,
@@ -91,11 +93,13 @@ function registerFullSearchProvider(id = "tickets"): ProviderHandle {
       state: FullSearchState,
       onProgress: () => void,
       signal: AbortSignal,
+      scope?: unknown,
     ) =>
       new Promise<void>((resolve, reject) => {
         runs.push({
           query,
           signal,
+          scope,
           progress(patch) {
             Object.assign(state, patch);
             onProgress();
@@ -154,6 +158,11 @@ interface HarnessOptions {
   failFetchResult?: boolean;
   /** Server-reported dataset size; undefined when the server has not said. */
   totalCount?: number;
+  /**
+   * Initial filter scope; when given, the harness passes a reactive
+   * fullSearchScope and setScope changes it.
+   */
+  scope?: unknown;
 }
 
 /** The slice of TanStack's fetchNextPage result deep search reads. */
@@ -173,6 +182,7 @@ interface Harness {
   setInitialLoading: (value: boolean) => void;
   setLoaded: (count: number) => void;
   setFetchingNext: (value: boolean) => void;
+  setScope: (value: unknown) => void;
   destroy: () => void;
 }
 
@@ -186,6 +196,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
   let initialLoading = $state(options.initialLoading ?? false);
   let loaded = $state(options.loaded ?? 0);
   let fetchingNext = $state(options.fetchingNext ?? false);
+  let scope = $state<unknown>(options.scope);
   // Never changes mid-test, so plain (non-reactive) is sufficient.
   const localMatchCount = options.localMatchCount ?? 5;
 
@@ -224,6 +235,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
       loadedCount: () => loaded,
       totalCount: () => options.totalCount,
       matchCount: () => localMatchCount,
+      fullSearchScope: options.scope === undefined ? undefined : () => scope,
     });
   });
   // Idempotent: tests may destroy early, afterEach destroys again.
@@ -266,6 +278,9 @@ function createHarness(options: HarnessOptions = {}): Harness {
     },
     setFetchingNext(value) {
       fetchingNext = value;
+    },
+    setScope(value) {
+      scope = value;
     },
     destroy,
   };
@@ -434,6 +449,35 @@ describe("createDeepSearch", () => {
       expect(h.ds.status).toBe("done");
       expect(h.ds.searched).toBe(12);
       expect(h.ds.total).toBe(12);
+    });
+
+    it("hands the page's filter scope to the provider run", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({
+        hasNext: false,
+        scope: { queueIds: ["q1"] },
+      });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      expect(p.runs).toHaveLength(1);
+      expect(p.runs[0]?.scope).toEqual({ queueIds: ["q1"] });
+    });
+
+    it("runs the provider unscoped when the page passes no filter scope", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ hasNext: false });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      expect(p.runs).toHaveLength(1);
+      expect(p.runs[0]?.scope).toBeUndefined();
     });
   });
 
@@ -957,6 +1001,135 @@ describe("createDeepSearch", () => {
       expect(live?.status).toBe("searching");
       expect(live?.total).not.toBe(999);
       expect(h.ds.status).toBe("searching");
+    });
+  });
+
+  describe("filter scope changes", () => {
+    it("reruns over the new scope when the filters change mid-run, keeping matches on screen until it is done", async () => {
+      const p = registerFullSearchProvider();
+      p.reset.mockImplementation(() => {
+        p.contentMatchIds.clear();
+      });
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      p.contentMatchIds.add("t1");
+      p.runs[0]!.progress({ searched: 1, total: 4, matchCount: 1 });
+      await settle();
+
+      h.setScope({});
+      await settle();
+
+      expect(p.runs[0]!.signal.aborted).toBe(true);
+      expect(p.runs).toHaveLength(2);
+      expect(p.runs[1]!.scope).toEqual({});
+      expect(h.ds.status).toBe("searching");
+      expect(h.ds.contentMatchIds?.has("t1")).toBe(true);
+
+      p.runs[1]!.finish({ searched: 8, total: 8, matchCount: 0 });
+      await settle();
+
+      expect(h.ds.status).toBe("done");
+      expect(h.ds.contentMatchIds?.has("t1")).toBe(false);
+    });
+
+    it("reruns when the filters change after the run is done", async () => {
+      const p = registerFullSearchProvider();
+      p.reset.mockImplementation(() => {
+        p.contentMatchIds.clear();
+      });
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      p.runs[0]!.finish({ searched: 4, total: 4 });
+      await settle();
+      expect(h.ds.status).toBe("done");
+
+      h.setScope({ queueIds: ["q2"] });
+      await settle();
+
+      expect(p.runs).toHaveLength(2);
+      expect(p.runs[1]!.scope).toEqual({ queueIds: ["q2"] });
+      expect(h.ds.status).toBe("searching");
+    });
+
+    it("reruns when the filters change after the run stopped, and keeps carried matches if the rerun stops too", async () => {
+      const p = registerFullSearchProvider();
+      p.reset.mockImplementation(() => {
+        p.contentMatchIds.clear();
+      });
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      p.contentMatchIds.add("t1");
+      p.runs[0]!.fail({ searched: 2, total: 4 });
+      await settle();
+      expect(h.ds.status).toBe("incomplete");
+
+      h.setScope({});
+      await settle();
+
+      expect(p.runs).toHaveLength(2);
+      expect(h.ds.status).toBe("searching");
+
+      p.runs[1]!.fail({ searched: 3, total: 8 });
+      await settle();
+
+      expect(h.ds.status).toBe("incomplete");
+      expect(h.ds.contentMatchIds?.has("t1")).toBe(true);
+    });
+
+    it("drops carried matches when the term changes", async () => {
+      const p = registerFullSearchProvider();
+      p.reset.mockImplementation(() => {
+        p.contentMatchIds.clear();
+      });
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      p.contentMatchIds.add("t1");
+      h.setScope({});
+      await settle();
+
+      h.overlay.setTerm("other");
+      await settle();
+
+      expect(h.ds.contentMatchIds?.has("t1") ?? false).toBe(false);
+    });
+
+    it("does not rerun when the scope is replaced by an equal one", async () => {
+      const p = registerFullSearchProvider();
+      p.reset.mockImplementation(() => {
+        p.contentMatchIds.clear();
+      });
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      h.setScope({ queueIds: ["q1"] });
+      await settle();
+
+      expect(p.runs).toHaveLength(1);
+      expect(p.runs[0]!.signal.aborted).toBe(false);
     });
   });
 });

@@ -18,6 +18,7 @@ import TicketSearchResult from "$lib/components/search/TicketSearchResult.svelte
 import Ticket from "$lib/components/icons/Ticket.svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
+import type { TicketListServerParams } from "$lib/stores/filters.svelte.js";
 
 /**
  * Raw ticket record from the TanStack Query cache. Carries encrypted
@@ -39,6 +40,30 @@ export interface TicketSearchData extends TicketDisplayFields {
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   /** The query that produced this result; renders the <mark> highlights. */
   readonly searchTerm: string;
+}
+
+/**
+ * The filter part of the ticket list's server params: what a deeper search
+ * run is narrowed to. Sort and page size are the provider's own concern.
+ */
+export type TicketSearchScope = Omit<
+  TicketListServerParams,
+  "sortBy" | "sortDirection" | "limit"
+>;
+
+/** The filter fields of the list's server params, for a scoped run. */
+export function ticketSearchScope(
+  params: TicketListServerParams,
+): TicketSearchScope {
+  return {
+    statuses: params.statuses,
+    onHold: params.onHold,
+    queueIds: params.queueIds,
+    priorities: params.priorities,
+    assignedTo: params.assignedTo,
+    createdAfter: params.createdAfter,
+    createdBefore: params.createdBefore,
+  };
 }
 
 interface KeyWrap {
@@ -79,7 +104,14 @@ export interface TicketSearchProviderDeps {
 
   // -- Full search deps --
 
-  readonly listAll?: (cursor?: string) => Promise<readonly RawCachedTicket[]>;
+  /**
+   * One page of tickets for the deeper search, narrowed by `scope` when the
+   * calling surface has filters active.
+   */
+  readonly listAll?: (
+    cursor?: string,
+    scope?: TicketSearchScope,
+  ) => Promise<readonly RawCachedTicket[]>;
   /** Set the full-search cache entry in TanStack (single key, accumulated). */
   readonly ingestTickets?: (tickets: readonly RawCachedTicket[]) => void;
   /** Resolves when all pending decrypts in TicketDecryptCache have completed. */
@@ -110,7 +142,7 @@ export interface TicketSearchProviderDeps {
 
 export function createTicketSearchProvider(
   deps: TicketSearchProviderDeps,
-): SearchProvider<TicketSearchData> {
+): SearchProvider<TicketSearchData, TicketSearchScope> {
   // Content matches from fullSearch content search, keyed by ticket ID.
   // SvelteSet so search() reads are tracked in $derived contexts.
   const contentMatchIds = new SvelteSet<string>();
@@ -131,7 +163,7 @@ export function createTicketSearchProvider(
     };
   }
 
-  const provider: SearchProvider<TicketSearchData> = {
+  const provider: SearchProvider<TicketSearchData, TicketSearchScope> = {
     id: "tickets",
     label: () => m.search_section_tickets(withTerms()),
     icon: Ticket,
@@ -301,6 +333,7 @@ export function createTicketSearchProvider(
       state: FullSearchState,
       onProgress: () => void,
       signal: AbortSignal,
+      scope?: TicketSearchScope,
     ): Promise<void> => {
       const PAGE_SIZE = 100;
       const CONTENT_PAGE_SIZE = 50;
@@ -328,7 +361,7 @@ export function createTicketSearchProvider(
         if (aborted()) return;
         let page: readonly RawCachedTicket[];
         try {
-          page = await listAll(cursor);
+          page = await listAll(cursor, scope);
         } catch (err) {
           // Record how far the run got before the registry marks it
           // incomplete: nothing was content-searched yet, and the total is

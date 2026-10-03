@@ -702,6 +702,8 @@
   "search_deep_nav_loading": "Loading {count}...",
   "search_deep_incomplete": "Deeper search stopped. Searched {searched} of {total} {tickets}.",
   "search_deep_incomplete_articles": "Deeper search stopped. Searched {searched} of {total} articles.",
+  "search_filter_scoped_notice": "Searching within the current filters.",
+  "search_filter_scoped_clear": "Search all {tickets}",
   "search_inline_trigger": "Search this page",
   "search_section_conversation": "In this conversation",
   "search_conversation_scope": "Searched {searched} of {total} messages",

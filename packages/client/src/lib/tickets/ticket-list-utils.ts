@@ -130,6 +130,16 @@ export function matchTitles(
     .filter((id): id is string => id != null);
 }
 
+/**
+ * Title matches first, then content matches the list can show.
+ *
+ * The validIds guard is required, not just defensive. A scoped deeper
+ * search fetches with the list's server params, which are a superset: the
+ * status filter is narrowed on the client, and the unread and needs
+ * attention filters never reach the server. A run the global search
+ * finished, which the page reuses, was not scoped at all. Either way a
+ * content match can name a ticket the active filters exclude.
+ */
 export function mergeSearchMatches(
   titleMatchIds: readonly string[],
   contentMatchIds: ReadonlySet<string> | null | undefined,

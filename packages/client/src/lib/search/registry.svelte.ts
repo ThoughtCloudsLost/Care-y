@@ -38,12 +38,14 @@ export function setPromotedOverride(...providerIds: string[]): () => void {
  * can register without a cast. The registry stores them as SearchProvider<unknown>
  * since it only passes result.data through to the provider's own ResultItem.
  */
-export function registerSearchProvider<T>(
-  provider: SearchProvider<T>,
+export function registerSearchProvider<T, S>(
+  provider: SearchProvider<T, S>,
 ): () => void {
   // Variance erasure: providers are stored as SearchProvider<unknown>.
   // Safe because the registry only passes result.data back to the
-  // provider's own ResultItem, which knows the concrete type.
+  // provider's own ResultItem, which knows the concrete type. The scope
+  // type is erased the same way and only travels back to the provider's
+  // own fullSearch.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- variance erasure at registry boundary
   providers.set(provider.id, provider as unknown as SearchProvider);
   return () => {
@@ -196,6 +198,7 @@ function startProviderRun(
   provider: SearchProvider,
   query: string,
   state: FullSearchState,
+  scope: unknown,
 ): void {
   if (!provider.fullSearch) return;
 
@@ -205,7 +208,7 @@ function startProviderRun(
     updateProviderState(provider.id, state);
   };
 
-  void provider.fullSearch(query, state, onProgress, signal).then(
+  void provider.fullSearch(query, state, onProgress, signal, scope).then(
     () => {
       if (!isCurrentRun(provider.id, generation)) return;
       state.status = "done";
@@ -265,12 +268,18 @@ export function runFullSearch(query: string): void {
   }));
 
   for (const provider of providersWithFullSearch) {
-    startProviderRun(provider, query, {
-      status: "searching",
-      searched: 0,
-      total: 0,
-      matchCount: 0,
-    });
+    // The global search has no filters, so its runs are unscoped.
+    startProviderRun(
+      provider,
+      query,
+      {
+        status: "searching",
+        searched: 0,
+        total: 0,
+        matchCount: 0,
+      },
+      undefined,
+    );
   }
 }
 
@@ -294,10 +303,16 @@ export function getContentMatchIds(
   return providers.get(providerId)?.getContentMatchIds?.();
 }
 
-/** Trigger full search for a single provider. */
+/**
+ * Trigger full search for a single provider.
+ *
+ * `scope` is the calling surface's filter scope, handed to the provider's
+ * fullSearch unchanged; the global search passes none.
+ */
 export function runFullSearchForProvider(
   providerId: string,
   query: string,
+  scope?: unknown,
 ): void {
   const provider = providers.get(providerId);
   if (!provider?.fullSearch) return;
@@ -325,7 +340,7 @@ export function runFullSearchForProvider(
     updateProviderState(providerId, state);
   }
 
-  startProviderRun(provider, query, state);
+  startProviderRun(provider, query, state, scope);
 }
 
 /**

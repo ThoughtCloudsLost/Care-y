@@ -1,3 +1,4 @@
+import { untrack } from "svelte";
 import {
   getFullSearchStateForProvider,
   getContentMatchIds,
@@ -36,6 +37,13 @@ export interface DeepSearchOptions {
   totalCount: () => number | undefined;
   /** Reactive getter: number of search matches from decrypted data (for auto-trigger). */
   matchCount: () => number;
+  /**
+   * Reactive getter for the provider-specific filter scope of a run. Read
+   * when the run starts and handed to the provider's fullSearch; a change to
+   * it reruns a started run over the new scope. Omit on a surface with no
+   * filters.
+   */
+  fullSearchScope?: () => unknown;
 }
 
 export interface DeepSearch {
@@ -47,7 +55,10 @@ export interface DeepSearch {
   readonly total: number;
   /** True when deep search can be triggered (provider supports it and not already running). */
   readonly canTrigger: boolean;
-  /** Content match IDs from the provider's fullSearch (reactive SvelteSet). */
+  /**
+   * Content match IDs from the provider's fullSearch, plus matches carried
+   * over from a run a filter change replaced, until the new run is done.
+   */
   readonly contentMatchIds: ReadonlySet<string> | undefined;
   /** Trigger deep search (fetch all pages + content search). */
   trigger: () => void;
@@ -63,19 +74,37 @@ export interface DeepSearch {
 /** Poll interval while waiting out a page fetch the list view already started. */
 const FETCH_POLL_MS = 16;
 
+/** Empty carried-match set; shared so clearing allocates nothing. */
+const NO_MATCHES: ReadonlySet<string> = new Set();
+
 export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   let phase = $state<"idle" | "fetching" | "content" | "done" | "error">(
     "idle",
   );
   let searchTerm = $state<string | null>(null);
-  let pendingFromUrl = $state(false);
+  let pendingTrigger = $state(false);
   // Snapshot of the last live counts when a run stops, so the incomplete
   // line reports how far it got.
   let stoppedSearched = $state(0);
   let stoppedTotal = $state(0);
+  // The scope the current run started with: the key detects a change, the
+  // value is what the provider run was handed.
+  let runScopeKey = $state<string | null>(null);
+  let runScope: unknown = undefined;
+  // Bumped whenever a run is started or abandoned, so a page loop left
+  // behind by a rerun stops at its next await instead of running beside it.
+  let runToken = 0;
+  // Content matches from a run a filter change replaced. They stay on
+  // screen under the new run's progress until that run is done.
+  let carriedMatchIds = $state.raw<ReadonlySet<string>>(NO_MATCHES);
 
   const fsState = $derived(getFullSearchStateForProvider(options.providerId));
   const contentMatchIds = $derived(getContentMatchIds(options.providerId));
+  const visibleMatchIds = $derived.by((): ReadonlySet<string> | undefined => {
+    if (carriedMatchIds.size === 0) return contentMatchIds;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- immutable snapshot, rebuilt by the derived, never mutated
+    return new Set([...carriedMatchIds, ...(contentMatchIds ?? [])]);
+  });
   const hasCapability = $derived(providerHasFullSearch(options.providerId));
 
   const status = $derived.by((): DeepSearchStatus => {
@@ -115,6 +144,15 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     stop(options.loadedCount(), options.totalCount() ?? options.loadedCount());
   }
 
+  function currentScopeKey(): string {
+    return JSON.stringify(options.fullSearchScope?.() ?? null);
+  }
+
+  function finishRun(): void {
+    phase = "done";
+    carriedMatchIds = NO_MATCHES;
+  }
+
   /**
    * Resolve once no page fetch is in flight. Also gives up if the run was
    * abandoned mid-wait (term changed, overlay closed), so a stale trigger
@@ -130,8 +168,12 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     if (phase !== "idle") return;
     const term = options.overlay.term ?? "";
     if (term.length < 2) return;
+    const run = ++runToken;
+    const superseded = (): boolean => run !== runToken;
 
     searchTerm = term;
+    runScope = options.fullSearchScope?.();
+    runScopeKey = JSON.stringify(runScope ?? null);
 
     // Fetch all remaining pages into the list view.
     //
@@ -144,7 +186,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     while (options.hasNextPage()) {
       if (options.isFetchingNextPage()) {
         await waitOutInFlightFetch();
-        if ((phase as string) !== "fetching") return;
+        if (superseded() || (phase as string) !== "fetching") return;
         continue;
       }
       let result: { readonly isFetchNextPageError: boolean };
@@ -153,10 +195,12 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
       } catch {
         // Only a run still fetching may record the failure; an abandoned
         // run (term changed, overlay closed) has already been reset.
-        if ((phase as string) === "fetching") stopAfterFailedFetch();
+        if (!superseded() && (phase as string) === "fetching") {
+          stopAfterFailedFetch();
+        }
         return;
       }
-      if ((phase as string) !== "fetching") return;
+      if (superseded() || (phase as string) !== "fetching") return;
       if (result.isFetchNextPageError) {
         // Stop here rather than matching over a partial page set. Terminal,
         // so the run never presents itself as complete coverage.
@@ -167,10 +211,10 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
 
     // Content search (skip if search sheet already completed it)
     if (fsState?.status === "done") {
-      phase = "done";
+      finishRun();
     } else {
       phase = "content";
-      runFullSearchForProvider(options.providerId, term);
+      runFullSearchForProvider(options.providerId, term, runScope);
     }
   }
 
@@ -178,7 +222,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   $effect(() => {
     if (phase !== "content") return;
     if (fsState?.status === "done") {
-      phase = "done";
+      finishRun();
     } else if (fsState?.status === "incomplete") {
       stop(fsState.searched, fsState.total);
     }
@@ -191,6 +235,29 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     void doTrigger();
   }
 
+  function rerunForScopeChange(): void {
+    // Snapshot before the reset clears the provider's set.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- immutable snapshot; reactivity comes from reassigning the state
+    carriedMatchIds = new Set([...carriedMatchIds, ...(contentMatchIds ?? [])]);
+    runToken++;
+    resetFullSearchForProvider(options.providerId);
+    phase = "idle";
+    runScopeKey = null;
+    pendingTrigger = true;
+  }
+
+  // A run covers the filter scope it started with. When the scope changes
+  // while a run is searching, done or stopped, rerun over the new scope:
+  // a done marker left over the old scope would claim items the run never
+  // searched. Clearing all filters is one case of this.
+  $effect(() => {
+    const key = currentScopeKey();
+    untrack(() => {
+      if (runScopeKey === null || phase === "idle") return;
+      if (key !== runScopeKey) rerunForScopeChange();
+    });
+  });
+
   // Reset when term changes or overlay closes during/after deep search
   $effect(() => {
     if (searchTerm == null) return;
@@ -198,6 +265,9 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
       phase = "idle";
       resetFullSearchForProvider(options.providerId);
       searchTerm = null;
+      runScopeKey = null;
+      runToken++;
+      carriedMatchIds = NO_MATCHES;
     }
   });
 
@@ -215,10 +285,11 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     }
   });
 
-  // "Show all" navigation: trigger after initial data load
+  // Pending trigger ("Show all" navigation, or a rerun after a filter
+  // change): run once the initial data has loaded.
   $effect(() => {
-    if (pendingFromUrl && !options.isInitialLoading() && phase === "idle") {
-      pendingFromUrl = false;
+    if (pendingTrigger && !options.isInitialLoading() && phase === "idle") {
+      pendingTrigger = false;
       void doTrigger();
     }
   });
@@ -237,13 +308,13 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
       return canTrigger;
     },
     get contentMatchIds(): ReadonlySet<string> | undefined {
-      return contentMatchIds;
+      return visibleMatchIds;
     },
     trigger(): void {
       void doTrigger();
     },
     scheduleFromNavigation(): void {
-      pendingFromUrl = true;
+      pendingTrigger = true;
     },
     retry(): void {
       retryStoppedRun();

@@ -59,6 +59,8 @@ function mockFullSearchProvider(
       query: string,
       state: FullSearchState,
       onProgress: () => void,
+      signal?: AbortSignal,
+      scope?: unknown,
     ) => Promise<void>;
     resetFn?: () => void;
   } = {},
@@ -346,6 +348,31 @@ describe("fullSearch callback coordination", () => {
 
     unregister();
   });
+
+  it("runFullSearch runs providers unscoped", async () => {
+    const scopes: unknown[] = [];
+    const unregister = registerSearchProvider(
+      mockFullSearchProvider("tickets", {
+        fullSearchFn: async (
+          _q: string,
+          _state: FullSearchState,
+          _onProgress: () => void,
+          _signal?: AbortSignal,
+          scope?: unknown,
+        ) => {
+          scopes.push(scope);
+        },
+      }),
+    );
+
+    runFullSearch("test");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(scopes).toHaveLength(1);
+    expect(scopes[0]).toBeUndefined();
+
+    unregister();
+  });
 });
 
 describe("resetFullSearchForProvider with concurrent requests", () => {
@@ -583,6 +610,32 @@ describe("edge cases", () => {
       const ticketState = getFullSearchStateForProvider("tickets");
       expect(ticketState?.status).toBe("done");
       expect(ticketState?.matchCount).toBe(2);
+
+      unregister();
+    });
+
+    it("hands the caller's scope to the provider's fullSearch", async () => {
+      const scopes: unknown[] = [];
+      const unregister = registerSearchProvider(
+        mockFullSearchProvider("tickets", {
+          fullSearchFn: async (
+            _q: string,
+            _state: FullSearchState,
+            _onProgress: () => void,
+            _signal?: AbortSignal,
+            scope?: unknown,
+          ) => {
+            scopes.push(scope);
+          },
+        }),
+      );
+
+      const scope = { queueIds: ["q1"] };
+      runFullSearchForProvider("tickets", "test", scope);
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(scopes).toHaveLength(1);
+      expect(scopes[0]).toBe(scope);
 
       unregister();
     });
