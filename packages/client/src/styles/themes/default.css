@@ -441,5 +441,6 @@
   letter-spacing: 0.03em;
   text-shadow: 0 0 0.5px currentColor;
   transform: rotate(-6deg);
-  opacity: 0.85;
+  /* No element opacity, as in shared.css: the initials keep the derived
+     brand text colour so they clear 4.5:1 on the dark surface. */
 }
