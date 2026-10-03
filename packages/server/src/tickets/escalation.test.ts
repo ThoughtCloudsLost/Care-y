@@ -4,11 +4,13 @@ import {
   createTestQueue,
   createTestTicketFixture,
   seedOrgPublicKey,
+  withFailingFollowUpInserts,
+  FollowUpInsertFailure,
   type TestDb,
 } from "../test-utils.js";
 import { escalateTenantTickets } from "./escalation.js";
 import type { TicketChangeListener } from "./ticket-live-events.js";
-import type { QueueId, TicketId } from "@care-y/shared";
+import type { QueueId, TicketId, TicketPriority } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
   let testDb: TestDb;
@@ -227,5 +229,47 @@ describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
       .where("id", "=", ticketId)
       .executeTakeFirstOrThrow();
     expect(ticket.priority).toBe("low");
+  });
+
+  it("a failed follow-up insert leaves every ticket's priority as it was", async () => {
+    const queue = await createTestQueue(testDb.db, { escalateDays: 3 });
+    await insertTicketWithAge({
+      queueId: queue.id,
+      ageDays: 5,
+      priority: "low",
+    });
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+
+    async function priorities(): Promise<
+      { id: TicketId; priority: TicketPriority }[]
+    > {
+      return testDb.db
+        .selectFrom("tickets")
+        .select(["id", "priority"])
+        .orderBy("id")
+        .execute();
+    }
+
+    async function totalFollowUps(): Promise<number> {
+      const row = await testDb.db
+        .selectFrom("followups")
+        .select((eb) => eb.fn.countAll().as("count"))
+        .executeTakeFirstOrThrow();
+      return Number(row.count);
+    }
+
+    const before = await priorities();
+    const followUpsBefore = await totalFollowUps();
+
+    await expect(
+      escalateTenantTickets(
+        withFailingFollowUpInserts(testDb.db),
+        onTicketChanged,
+      ),
+    ).rejects.toBeInstanceOf(FollowUpInsertFailure);
+
+    expect(await priorities()).toEqual(before);
+    expect(await totalFollowUps()).toBe(followUpsBefore);
+    expect(onTicketChanged).not.toHaveBeenCalled();
   });
 });

@@ -9,7 +9,7 @@
  * Optimistic concurrency via WHERE assigned_to IS NULL guards TOCTOU races.
  */
 
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { ShiftProvider } from "./shift-provider.js";
 import type { TicketAccessChecker } from "./access.js";
@@ -95,11 +95,12 @@ export function createAssignmentService(
   }
 
   async function createSystemFollowUp(
+    trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
     ticketId: TicketId,
     type: string,
     eventParams?: Record<string, unknown>,
   ): Promise<void> {
-    await db
+    await trxOrDb
       .insertInto("followups")
       .values({
         ticket_id: ticketId,
@@ -149,20 +150,26 @@ export function createAssignmentService(
 
       // Optimistic concurrency: only assign if still unassigned.
       // If another request raced us, numUpdatedRows === 0n.
-      const result = await db
-        .updateTable("tickets")
-        .set({ assigned_to: chosen })
-        .where("id", "=", ticketId)
-        .where("assigned_to", "is", null)
-        .executeTakeFirst();
+      const assigned = await db.transaction().execute(async (trx) => {
+        const result = await trx
+          .updateTable("tickets")
+          .set({ assigned_to: chosen })
+          .where("id", "=", ticketId)
+          .where("assigned_to", "is", null)
+          .executeTakeFirst();
 
-      if (result.numUpdatedRows === BigInt(0)) {
+        if (result.numUpdatedRows === BigInt(0)) return false;
+
+        await createSystemFollowUp(trx, ticketId, "volunteer_assigned", {
+          userId: chosen,
+        });
+        return true;
+      });
+
+      if (!assigned) {
         return { assignedTo: null };
       }
 
-      await createSystemFollowUp(ticketId, "volunteer_assigned", {
-        userId: chosen,
-      });
       deps?.onTicketChanged?.(ticketId);
       return { assignedTo: chosen };
     },
@@ -184,91 +191,108 @@ export function createAssignmentService(
         throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
       }
 
-      // Optimistic concurrency: WHERE assigned_to IS NULL guards the TOCTOU race.
-      const result = await db
-        .updateTable("tickets")
-        .set({ assigned_to: userId })
-        .where("id", "=", ticketId)
-        .where("assigned_to", "is", null)
-        .executeTakeFirst();
+      await db.transaction().execute(async (trx) => {
+        // Optimistic concurrency: WHERE assigned_to IS NULL guards the TOCTOU race.
+        const result = await trx
+          .updateTable("tickets")
+          .set({ assigned_to: userId })
+          .where("id", "=", ticketId)
+          .where("assigned_to", "is", null)
+          .executeTakeFirst();
 
-      if (result.numUpdatedRows === BigInt(0)) {
-        throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
-      }
+        if (result.numUpdatedRows === BigInt(0)) {
+          throw new TicketError(ErrorCode.TICKET_ALREADY_ASSIGNED);
+        }
 
-      await createSystemFollowUp(ticketId, "volunteer_assigned", { userId });
+        await createSystemFollowUp(trx, ticketId, "volunteer_assigned", {
+          userId,
+        });
+      });
+
       deps?.onTicketChanged?.(ticketId);
     },
 
     async release(userId, ticketId) {
       await access.assertAccess(userId, ticketId);
 
-      const ticket = await db
-        .selectFrom("tickets")
-        .select(["id", "assigned_to"])
-        .where("id", "=", ticketId)
-        .executeTakeFirst();
+      await db.transaction().execute(async (trx) => {
+        const ticket = await trx
+          .selectFrom("tickets")
+          .select(["id", "assigned_to"])
+          .where("id", "=", ticketId)
+          .forUpdate()
+          .executeTakeFirst();
 
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      if (ticket.assigned_to !== userId) {
-        throw new TicketError(ErrorCode.NOT_ASSIGNED_TO_TICKET);
-      }
+        if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+        if (ticket.assigned_to !== userId) {
+          throw new TicketError(ErrorCode.NOT_ASSIGNED_TO_TICKET);
+        }
 
-      await db
-        .updateTable("tickets")
-        .set({ assigned_to: null })
-        .where("id", "=", ticketId)
-        .execute();
+        await trx
+          .updateTable("tickets")
+          .set({ assigned_to: null })
+          .where("id", "=", ticketId)
+          .execute();
 
-      await createSystemFollowUp(ticketId, "volunteer_unassigned", { userId });
+        await createSystemFollowUp(trx, ticketId, "volunteer_unassigned", {
+          userId,
+        });
+      });
+
       deps?.onTicketChanged?.(ticketId);
     },
 
     async assignTo(actorId, ticketId, targetUserId) {
       await access.assertAccess(actorId, ticketId);
 
-      const ticket = await db
-        .selectFrom("tickets")
-        .select(["id", "status", "assigned_to"])
-        .where("id", "=", ticketId)
-        .executeTakeFirst();
-
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      if (ticket.status !== "open") {
-        throw new TicketError(ErrorCode.CANNOT_ASSIGN_CLOSED_TICKET);
-      }
-
-      if (targetUserId !== null) {
-        // Verify target is an active user in this tenant schema
-        const targetUser = await db
-          .selectFrom("users")
-          .select(["id", "is_active"])
-          .where("id", "=", targetUserId)
+      const changed = await db.transaction().execute(async (trx) => {
+        const ticket = await trx
+          .selectFrom("tickets")
+          .select(["id", "status", "assigned_to"])
+          .where("id", "=", ticketId)
+          .forUpdate()
           .executeTakeFirst();
 
-        if (targetUser?.is_active !== true) {
-          throw new ForbiddenError(ErrorCode.INVALID_TARGET_USER);
+        if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+        if (ticket.status !== "open") {
+          throw new TicketError(ErrorCode.CANNOT_ASSIGN_CLOSED_TICKET);
         }
-      }
 
-      // Skip DB write if assignment is already in the desired state
-      if (ticket.assigned_to === targetUserId) return;
+        if (targetUserId !== null) {
+          // Verify target is an active user in this tenant schema
+          const targetUser = await trx
+            .selectFrom("users")
+            .select(["id", "is_active"])
+            .where("id", "=", targetUserId)
+            .executeTakeFirst();
 
-      await db
-        .updateTable("tickets")
-        .set({ assigned_to: targetUserId })
-        .where("id", "=", ticketId)
-        .execute();
+          if (targetUser?.is_active !== true) {
+            throw new ForbiddenError(ErrorCode.INVALID_TARGET_USER);
+          }
+        }
 
-      if (targetUserId !== null) {
-        await createSystemFollowUp(ticketId, "volunteer_assigned", {
-          userId: targetUserId,
-        });
-      } else if (ticket.assigned_to !== null) {
-        await createSystemFollowUp(ticketId, "volunteer_unassigned", {
-          userId: ticket.assigned_to,
-        });
-      }
+        // Skip DB write if assignment is already in the desired state
+        if (ticket.assigned_to === targetUserId) return false;
+
+        await trx
+          .updateTable("tickets")
+          .set({ assigned_to: targetUserId })
+          .where("id", "=", ticketId)
+          .execute();
+
+        if (targetUserId !== null) {
+          await createSystemFollowUp(trx, ticketId, "volunteer_assigned", {
+            userId: targetUserId,
+          });
+        } else if (ticket.assigned_to !== null) {
+          await createSystemFollowUp(trx, ticketId, "volunteer_unassigned", {
+            userId: ticket.assigned_to,
+          });
+        }
+        return true;
+      });
+
+      if (!changed) return;
       deps?.onTicketChanged?.(ticketId);
     },
   };

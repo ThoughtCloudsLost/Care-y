@@ -1264,51 +1264,56 @@ export function createTicketService(
         return toRecord(existing);
       }
 
-      // Load prior values for fields that need before/after comparison.
-      // The access check does not return the row, so one select is needed.
-      const prior = await db
-        .selectFrom("tickets")
-        .select(["priority", "queue_id"])
-        .where("id", "=", input.ticketId)
-        .executeTakeFirst();
-      if (!prior) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+      const row = await db.transaction().execute(async (trx) => {
+        // Lock the row so the from values and the unchanged checks come
+        // from the row this write replaces.
+        const prior = await trx
+          .selectFrom("tickets")
+          .select(["priority", "queue_id"])
+          .where("id", "=", input.ticketId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!prior) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
 
-      const row = await db
-        .updateTable("tickets")
-        .set(updates)
-        .where("id", "=", input.ticketId)
-        .returningAll()
-        .executeTakeFirst();
+        const updated = await trx
+          .updateTable("tickets")
+          .set(updates)
+          .where("id", "=", input.ticketId)
+          .returningAll()
+          .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+        if (!updated) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
 
-      // Create system follow-ups for state changes
-      if (input.onHold !== undefined) {
-        await createSystemFollowUp(
-          db,
-          input.ticketId,
-          input.onHold ? "hold_placed" : "hold_removed",
-        );
-      }
-      if (input.priority !== undefined && input.priority !== prior.priority) {
-        await createSystemFollowUp(db, input.ticketId, "priority_changed", {
-          from: prior.priority,
-          to: input.priority,
-        });
-      }
-      if (input.queueId !== undefined && input.queueId !== prior.queue_id) {
-        await createSystemFollowUp(db, input.ticketId, "queue_changed", {
-          from: prior.queue_id,
-          to: input.queueId,
-        });
-      }
-      if (input.status !== undefined) {
-        await createSystemFollowUp(
-          db,
-          input.ticketId,
-          input.status === "open" ? "status_opened" : "status_closed",
-        );
-      }
+        // Create system follow-ups for state changes
+        if (input.onHold !== undefined) {
+          await createSystemFollowUp(
+            trx,
+            input.ticketId,
+            input.onHold ? "hold_placed" : "hold_removed",
+          );
+        }
+        if (input.priority !== undefined && input.priority !== prior.priority) {
+          await createSystemFollowUp(trx, input.ticketId, "priority_changed", {
+            from: prior.priority,
+            to: input.priority,
+          });
+        }
+        if (input.queueId !== undefined && input.queueId !== prior.queue_id) {
+          await createSystemFollowUp(trx, input.ticketId, "queue_changed", {
+            from: prior.queue_id,
+            to: input.queueId,
+          });
+        }
+        if (input.status !== undefined) {
+          await createSystemFollowUp(
+            trx,
+            input.ticketId,
+            input.status === "open" ? "status_opened" : "status_closed",
+          );
+        }
+
+        return updated;
+      });
 
       deps?.onTicketChanged?.(input.ticketId);
       return toRecord(row);
@@ -1323,21 +1328,27 @@ export function createTicketService(
         throw new TicketError(ErrorCode.TICKET_UNRESOLVED_DEPS);
       }
 
-      // Closing clears the hold. Hold is a peer status of New, Active and
-      // Closed, so a closed ticket carrying the flag would sit in two
-      // statuses at once: counted under Hold forever while no hold view
-      // can show it, since those views load open tickets.
-      const row = await db
-        .updateTable("tickets")
-        .set({ status: "closed", on_hold: false })
-        .where("id", "=", ticketId)
-        .where("status", "=", "open")
-        .returningAll()
-        .executeTakeFirst();
+      const row = await db.transaction().execute(async (trx) => {
+        // Closing clears the hold. Hold is a peer status of New, Active and
+        // Closed, so a closed ticket carrying the flag would sit in two
+        // statuses at once: counted under Hold forever while no hold view
+        // can show it, since those views load open tickets.
+        const updated = await trx
+          .updateTable("tickets")
+          .set({ status: "closed", on_hold: false })
+          .where("id", "=", ticketId)
+          .where("status", "=", "open")
+          .returningAll()
+          .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_CLOSED);
+        if (!updated) {
+          throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_CLOSED);
+        }
 
-      await createSystemFollowUp(db, ticketId, "status_closed");
+        await createSystemFollowUp(trx, ticketId, "status_closed");
+        return updated;
+      });
+
       deps?.onTicketChanged?.(ticketId);
       return toRecord(row);
     },
@@ -1345,20 +1356,26 @@ export function createTicketService(
     async reopen(userId, ticketId, newKeyGeneration) {
       await access.assertAccess(userId, ticketId);
 
-      const row = await db
-        .updateTable("tickets")
-        .set({
-          status: "open",
-          key_generation: newKeyGeneration,
-        })
-        .where("id", "=", ticketId)
-        .where("status", "=", "closed")
-        .returningAll()
-        .executeTakeFirst();
+      const row = await db.transaction().execute(async (trx) => {
+        const updated = await trx
+          .updateTable("tickets")
+          .set({
+            status: "open",
+            key_generation: newKeyGeneration,
+          })
+          .where("id", "=", ticketId)
+          .where("status", "=", "closed")
+          .returningAll()
+          .executeTakeFirst();
 
-      if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_OPEN);
+        if (!updated) {
+          throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_OPEN);
+        }
 
-      await createSystemFollowUp(db, ticketId, "status_opened");
+        await createSystemFollowUp(trx, ticketId, "status_opened");
+        return updated;
+      });
+
       deps?.onTicketChanged?.(ticketId);
       return toRecord(row);
     },

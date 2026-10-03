@@ -8,6 +8,8 @@ import {
   createTestClientFixture,
   testSealedBox,
   noopEncryptor,
+  withFailingFollowUpInserts,
+  FollowUpInsertFailure,
   type TestDb,
 } from "../test-utils.js";
 import {
@@ -43,6 +45,8 @@ import {
   type PhoneHash,
   type OrgSchema,
   type AliasHash,
+  type TicketStatus,
+  type TicketPriority,
 } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
@@ -633,6 +637,58 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       .where("type", "=", "queue_changed")
       .execute();
     expect(followups).toHaveLength(0);
+  });
+
+  it("update records the priority the previous update left as the from value", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.update(userId, { ticketId, priority: "high" });
+    await svc.update(userId, { ticketId, priority: "urgent" });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "priority_changed")
+      .orderBy("created_at", "asc")
+      .execute();
+    expect(followups).toHaveLength(2);
+    const params = followups[1]!.event_params as { from: string; to: string };
+    expect(params.from).toBe("high");
+    expect(params.to).toBe("urgent");
+  });
+
+  it("update records the queue the previous update left as the from value", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const queue2 = await createTestQueue(testDb.db, {
+      label: "Target-Q-" + crypto.randomUUID().slice(0, 8),
+    });
+    const queue3 = await createTestQueue(testDb.db, {
+      label: "Target-Q-" + crypto.randomUUID().slice(0, 8),
+    });
+    // Membership of queue 2 keeps the second update past the access check
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queue2.id, user_id: userId })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    await svc.update(userId, { ticketId, queueId: queue2.id });
+    await svc.update(userId, { ticketId, queueId: queue3.id });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "queue_changed")
+      .orderBy("created_at", "asc")
+      .execute();
+    expect(followups).toHaveLength(2);
+    const params = followups[1]!.event_params as { from: string; to: string };
+    expect(params.from).toBe(queue2.id);
+    expect(params.to).toBe(queue3.id);
   });
 
   // --- Key wrap read path ---
@@ -2889,6 +2945,97 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(ticket!.clientPhoneId).toBe(fix.phoneId);
     expect(ticket!.clientPhoneEncrypted).not.toBeNull();
     expect(Buffer.isBuffer(ticket!.clientPhoneEncrypted)).toBe(true);
+  });
+
+  describe("a failed system follow-up rolls back the ticket write", () => {
+    function createFailingService(
+      onTicketChanged: TicketChangeListener,
+    ): TicketService {
+      const qps = createQueuePermissionsService(testDb.db);
+      return createTicketService(
+        withFailingFollowUpInserts(testDb.db),
+        access,
+        (id) => qps.getUserQueues(id),
+        { onTicketChanged },
+      );
+    }
+
+    async function followUpCount(ticketId: TicketId): Promise<number> {
+      const row = await testDb.db
+        .selectFrom("followups")
+        .select((eb) => eb.fn.countAll().as("count"))
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+      return Number(row.count);
+    }
+
+    async function readTicket(ticketId: TicketId): Promise<{
+      status: TicketStatus;
+      on_hold: boolean;
+      priority: TicketPriority;
+      key_generation: KeyGeneration;
+    }> {
+      return testDb.db
+        .selectFrom("tickets")
+        .select(["status", "on_hold", "priority", "key_generation"])
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+    }
+
+    it("update leaves the hold and priority as they were", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+      const failing = createFailingService(onTicketChanged);
+      const before = await readTicket(ticketId);
+      const followUpsBefore = await followUpCount(ticketId);
+
+      await expect(
+        failing.update(userId, { ticketId, onHold: true, priority: "urgent" }),
+      ).rejects.toBeInstanceOf(FollowUpInsertFailure);
+
+      const after = await readTicket(ticketId);
+      expect(after.on_hold).toBe(false);
+      expect(after.priority).toBe(before.priority);
+      expect(await followUpCount(ticketId)).toBe(followUpsBefore);
+      expect(onTicketChanged).not.toHaveBeenCalled();
+    });
+
+    it("close leaves the ticket open and on hold", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      await svc.update(userId, { ticketId, onHold: true });
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+      const failing = createFailingService(onTicketChanged);
+      const followUpsBefore = await followUpCount(ticketId);
+
+      await expect(failing.close(userId, ticketId)).rejects.toBeInstanceOf(
+        FollowUpInsertFailure,
+      );
+
+      const after = await readTicket(ticketId);
+      expect(after.status).toBe("open");
+      expect(after.on_hold).toBe(true);
+      expect(await followUpCount(ticketId)).toBe(followUpsBefore);
+      expect(onTicketChanged).not.toHaveBeenCalled();
+    });
+
+    it("reopen leaves the ticket closed with its key generation", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      await svc.close(userId, ticketId);
+      const before = await readTicket(ticketId);
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+      const failing = createFailingService(onTicketChanged);
+      const followUpsBefore = await followUpCount(ticketId);
+
+      await expect(
+        failing.reopen(userId, ticketId, newKeyGeneration()),
+      ).rejects.toBeInstanceOf(FollowUpInsertFailure);
+
+      const after = await readTicket(ticketId);
+      expect(after.status).toBe("closed");
+      expect(after.key_generation).toBe(before.key_generation);
+      expect(await followUpCount(ticketId)).toBe(followUpsBefore);
+      expect(onTicketChanged).not.toHaveBeenCalled();
+    });
   });
 
   // --- updateContent (7.5b) ---

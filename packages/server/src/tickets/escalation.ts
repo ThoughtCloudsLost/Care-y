@@ -43,7 +43,7 @@ const NEXT_PRIORITY: Partial<Record<TicketPriority, TicketPriority>> = {
  * 5. priority is not already 'urgent'
  *
  * `onTicketChanged` is called for each escalated ticket once its priority
- * and system follow-up are written.
+ * change and system follow-up commit together.
  */
 export async function escalateTenantTickets(
   db: Kysely<TenantDatabase>,
@@ -77,22 +77,24 @@ export async function escalateTenantTickets(
     const newPriority = NEXT_PRIORITY[ticket.priority];
     if (newPriority === undefined) continue;
 
-    await db
-      .updateTable("tickets")
-      .set({ priority: newPriority })
-      .where("id", "=", ticket.id)
-      .execute();
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable("tickets")
+        .set({ priority: newPriority })
+        .where("id", "=", ticket.id)
+        .execute();
 
-    await db
-      .insertInto("followups")
-      .values({
-        ticket_id: ticket.id,
-        source: "system",
-        type: "priority_changed",
-        encrypted_content: Buffer.alloc(0),
-        event_params: { from: ticket.priority, to: newPriority },
-      })
-      .execute();
+      await trx
+        .insertInto("followups")
+        .values({
+          ticket_id: ticket.id,
+          source: "system",
+          type: "priority_changed",
+          encrypted_content: Buffer.alloc(0),
+          event_params: { from: ticket.priority, to: newPriority },
+        })
+        .execute();
+    });
 
     onTicketChanged?.(ticket.id);
     escalatedCount++;
