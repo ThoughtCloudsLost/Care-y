@@ -371,8 +371,9 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     }
     await expect(page).toHaveURL("/tickets");
 
-    // Wait for tickets to re-render.
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    // Wait for tickets to re-render. At desktop widths the title is also
+    // in the still-open detail pane's heading, so take the first match.
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });

@@ -596,8 +596,12 @@ test.describe.serial("Intake validation matrix", () => {
     // Required errors: textarea carries its own message, the other field
     // types share the generic one. The hidden conditional field must NOT
     // produce an error (validation skips invisible fields).
+    // exact: the issue summary above the form repeats each message with
+    // the field name in front, so a substring match resolves twice.
     await expect(
-      page.getByText("Please write a message so we know how to help."),
+      page.getByText("Please write a message so we know how to help.", {
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 5_000 });
     const genericErrors = page.getByText("This field is required.", {
       exact: true,
@@ -616,11 +620,13 @@ test.describe.serial("Intake validation matrix", () => {
     await page.getByLabel(LABELS.phone).fill("12");
     await page.getByTestId("intake-page-next").click();
 
-    await expect(page.getByText("Enter a valid email address.")).toBeVisible({
-      timeout: 5_000,
-    });
     await expect(
-      page.getByText("Enter a phone number like +1 555 000 1234."),
+      page.getByText("Enter a valid email address.", { exact: true }),
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.getByText("Enter a phone number like +1 555 000 1234.", {
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 5_000 });
 
     // No NaN case: the number subtype renders input[type=number], and
@@ -630,14 +636,14 @@ test.describe.serial("Intake validation matrix", () => {
     // Range checks: above max, then below min.
     await page.getByLabel(LABELS.amount).fill("9");
     await page.getByTestId("intake-page-next").click();
-    await expect(page.getByText("Value must be at most 5.")).toBeVisible({
-      timeout: 5_000,
-    });
+    await expect(
+      page.getByText("Value must be at most 5.", { exact: true }),
+    ).toBeVisible({ timeout: 5_000 });
     await page.getByLabel(LABELS.amount).fill("0");
     await page.getByTestId("intake-page-next").click();
-    await expect(page.getByText("Value must be at least 1.")).toBeVisible({
-      timeout: 5_000,
-    });
+    await expect(
+      page.getByText("Value must be at least 1.", { exact: true }),
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   test("conditional field appears with its trigger and validates", async ({}, testInfo) => {
@@ -693,7 +699,9 @@ test.describe.serial("Intake validation matrix", () => {
     // Submit with the last page empty: its required textarea blocks.
     await page.getByTestId("intake-submit").click();
     await expect(
-      page.getByText("Please write a message so we know how to help."),
+      page.getByText("Please write a message so we know how to help.", {
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 5_000 });
 
     await page.getByLabel(LABELS.details).fill("Nothing further");

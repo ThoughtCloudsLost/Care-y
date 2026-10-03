@@ -64,9 +64,13 @@ test.describe.serial("Encrypted Account Portal", () => {
   let volunteerPage: Page;
   let loginFailedText = "";
   let upgradeLink = "";
+  // Seeded inbound messages carry their own key generation for good, so
+  // the convergence check only looks at follow-ups this spec created.
+  let suiteStartedAt = "";
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    suiteStartedAt = new Date().toISOString();
     // All browser projects share one org: an earlier project's run left
     // the upgrade-half client (UPGRADE_TICKET_TITLE's) upgraded, and
     // its "Set up secure link" flow needs a fresh SMS/Email client.
@@ -297,7 +301,8 @@ test.describe.serial("Encrypted Account Portal", () => {
       .toBe(0);
     const pendingGenerations = queryDb(
       `SELECT count(*) FROM followups
-       WHERE source = 'client' AND key_generation IS NOT NULL;`,
+       WHERE source = 'client' AND key_generation IS NOT NULL
+         AND created_at >= '${suiteStartedAt}';`,
     ).trim();
     expect(Number(pendingGenerations)).toBe(0);
   });
