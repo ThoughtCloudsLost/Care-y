@@ -410,6 +410,8 @@ pnpm test
 pnpm coverage:full
 ```
 
+Pull requests run the type check, lint, format and every vitest project on GitHub Actions, sharded across runners. The Playwright suite and the merged coverage report run on demand from the Actions tab (the E2E workflow), with the reports attached to the run.
+
 ---
 
 ## Contributing
