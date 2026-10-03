@@ -48,6 +48,8 @@ const E2E_ORG_NAME = "E2E Test Org";
  */
 const LOCKED_TICKET_VOLUNTEER = "vol.crisis";
 const VOLUNTEER_PASSWORD = "dev-password-1234!";
+/** What the volunteer's first login sets in place of the temporary password. */
+const REPLACED_VOLUNTEER_PASSWORD = "dev-password-1234!-chosen";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -170,9 +172,31 @@ async function createLockedTicket(
   };
   try {
     const volPage = await volContext.newPage();
-    await login(volPage, LOCKED_TICKET_VOLUNTEER, VOLUNTEER_PASSWORD, {
-      allowOrgKeyWait: true,
-    });
+    // An administrator-created account replaces its temporary password at
+    // first sign-in. On a fresh database the replay's password is still the
+    // temporary one and the wizard asks for a new one; on a database that
+    // has been through this setup before, the replaced password is the one
+    // that works. Try the replaced password first, then fall back.
+    try {
+      await login(
+        volPage,
+        LOCKED_TICKET_VOLUNTEER,
+        REPLACED_VOLUNTEER_PASSWORD,
+        {
+          allowOrgKeyWait: true,
+        },
+      );
+    } catch (error) {
+      if (!(
+        error instanceof E2eError && error.message.startsWith("Login failed:")
+      )) {
+        throw error;
+      }
+      await login(volPage, LOCKED_TICKET_VOLUNTEER, VOLUNTEER_PASSWORD, {
+        allowOrgKeyWait: true,
+        replacementPassword: REPLACED_VOLUNTEER_PASSWORD,
+      });
+    }
     console.log("[e2e-seed] second seed account signed in");
 
     // A fresh admin session runs the auto-wrap for accounts that have

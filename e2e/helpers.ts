@@ -139,6 +139,11 @@ export interface LoginOptions {
    *  wrapped_org_keys row until the seed-data setup calls devSeedOrgKey;
    *  only that setup should pass this. */
   readonly allowOrgKeyWait?: boolean;
+  /** The password to set when the wizard asks the account to replace the
+   *  temporary one an administrator chose (every administrator-created
+   *  account, which includes the seed volunteers on a fresh database).
+   *  Without it that step fails loudly instead of waiting out a timeout. */
+  readonly replacementPassword?: string;
 }
 
 /** First-attempt bound on the credential leg. Timed full runs put healthy
@@ -327,12 +332,12 @@ async function loginAttempt(
   );
 
   if (result === "onboarding") {
-    await completeOnboarding(page, username);
+    await completeOnboarding(page, username, password, options);
   } else if (result === "2fa-challenge") {
     await completeTwofaChallenge(page, username);
     // 2FA may redirect to /complete if onboarding is still needed.
     if (page.url().endsWith("/complete")) {
-      await completeOnboarding(page, username);
+      await completeOnboarding(page, username, password, options);
     }
   }
   // result === "done": already on /, nothing to do
@@ -366,68 +371,94 @@ async function loginAttempt(
 
 /**
  * Complete the post-login onboarding wizard on /complete.
- * Steps are conditional: briefing only if not yet seen, 2FA only if not enrolled.
+ *
+ * The wizard shows whichever steps are still needed, in order: replace a
+ * temporary password (administrator-created accounts), the security
+ * briefing (four sub-pages), TOTP enrollment; or none, straight to /. Each
+ * round races the four outcomes and handles the one that appears, instead
+ * of sleeping and sampling isVisible(): isVisible() ignores its timeout
+ * option and answers at once, so a step that has not painted yet reads as
+ * "not needed" and its clicks are skipped (2026-10-03, a fresh volunteer's
+ * first login on a CI runner). Every spec's login runs through here.
  * The wizard nav renders Next/Confirm as Konsta Link elements in the navbar.
  */
-async function completeOnboarding(page: Page, username: string): Promise<void> {
-  // The wizard shows whichever step is still needed: the security briefing
-  // (four sub-pages), then TOTP enrollment, or neither (straight to /).
-  // Race the three outcomes instead of sleeping and sampling isVisible():
-  // isVisible() ignores its timeout option and answers at once, so a step
-  // that has not painted yet reads as "not needed" and its clicks are
-  // skipped. That is how a fresh volunteer's first login on a CI runner
-  // sat on page one of the briefing while the helper waited for the 2FA
-  // heading (2026-10-03). Every spec's login runs through here.
+async function completeOnboarding(
+  page: Page,
+  username: string,
+  password: string,
+  options: LoginOptions,
+): Promise<void> {
+  const passwordHeading = page.getByText("Choose Your Own Password");
   const briefingHeading = page.getByText("How CARE-Y Protects Your Data");
   const twofaHeading = page.getByText("Set Up Two-Factor Authentication");
-  const firstStep = await Promise.race([
-    briefingHeading
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
-      .then(() => "briefing" as const),
-    twofaHeading
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
-      .then(() => "2fa" as const),
-    page
-      .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
-      .then(() => "done" as const),
-  ]);
-  console.log(`[onboarding] first step: ${firstStep}`);
-  if (firstStep === "done") return;
-
-  if (firstStep === "briefing") {
-    // Click through 3 sub-pages via the wizard navbar's "Next" link.
-    // The onboarding layout marks its navbar with role="banner".
-    for (let i = 0; i < 3; i++) {
-      await page.getByRole("banner").getByText("Next").click();
-      await page.waitForTimeout(300);
-    }
-    // Last page: "Confirm"
-    await page.getByRole("banner").getByText("Confirm").click();
-  }
-
-  // Step 2: TOTP enrollment (if present). After the briefing the wizard
-  // either shows the 2FA heading or finishes to /; race the two.
-  const enrollmentShown =
-    firstStep === "2fa" ||
-    (await Promise.race([
+  const nextStep = async (): Promise<
+    "password" | "briefing" | "2fa" | "done"
+  > =>
+    Promise.race([
+      passwordHeading
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(() => "password" as const),
+      briefingHeading
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(() => "briefing" as const),
       twofaHeading
         .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
-        .then(() => true)
-        .catch(() => false),
+        .then(() => "2fa" as const),
       page
         .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
-        .then(() => false)
-        .catch(() => false),
-    ]));
+        .then(() => "done" as const),
+    ]);
 
-  if (enrollmentShown) {
+  for (;;) {
+    const step = await nextStep();
+    console.log(`[onboarding] step: ${step}`);
+    if (step === "done") return;
+
+    if (step === "password") {
+      if (options.replacementPassword === undefined) {
+        throw new E2eError(
+          `${username} must replace its temporary password; pass replacementPassword to login()`,
+        );
+      }
+      await page.getByLabel("Current password").fill(password);
+      await page
+        .getByLabel("New password (16+ characters)")
+        .fill(options.replacementPassword);
+      await page
+        .getByLabel("Confirm new password")
+        .fill(options.replacementPassword);
+      await page.getByRole("banner").getByText("Next").click();
+      // The change re-wraps the account's keys before the step leaves.
+      await passwordHeading.waitFor({
+        state: "hidden",
+        timeout: CRYPTO_TIMEOUT,
+      });
+      continue;
+    }
+
+    if (step === "briefing") {
+      // Click through 3 sub-pages via the wizard navbar's "Next" link.
+      // The onboarding layout marks its navbar with role="banner".
+      for (let i = 0; i < 3; i++) {
+        await page.getByRole("banner").getByText("Next").click();
+        await page.waitForTimeout(300);
+      }
+      // Last page: "Confirm"
+      await page.getByRole("banner").getByText("Confirm").click();
+      await briefingHeading.waitFor({
+        state: "hidden",
+        timeout: CRYPTO_TIMEOUT,
+      });
+      continue;
+    }
+
+    // step === "2fa"
     await enrollTotp(page, username);
-
     // After enrollment, "Next" in the wizard navbar finishes onboarding
     await page.getByRole("banner").getByText("Next").click();
+    await page.waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT });
+    return;
   }
-
-  await page.waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT });
 }
 
 /**
