@@ -11,6 +11,7 @@
   import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import { ErrorCode } from "@care-y/shared";
 
   export interface CategoryEntry {
     id: string;
@@ -122,13 +123,17 @@
       orgCache.delete(`kb-cat-desc:${categoryId}`);
       cancelEdit();
       void queryClient.invalidateQueries({ queryKey: kbKeys.categories() });
-    } catch {
-      // The server's FK RESTRICT constraint is the authoritative guard.
-      // The client-side articleCount check above is a fast-path optimization
-      // but may be stale (infinite scroll doesn't load all pages). If the
-      // server rejects the delete for any reason, show the specific message
-      // since FK violation is the only realistic failure mode here.
-      toastStore.show(m.library_category_delete_blocked(), 3000);
+    } catch (err: unknown) {
+      // The server's foreign key is the authoritative guard: articleCount
+      // may be stale because infinite scroll does not load every page.
+      if (
+        err instanceof Error &&
+        err.message === ErrorCode.KB_CATEGORY_HAS_ARTICLES
+      ) {
+        toastStore.show(m.library_category_delete_blocked(), 3000);
+      } else {
+        toastStore.show(m.error_generic(), 3000);
+      }
     } finally {
       saving = false;
     }

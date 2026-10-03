@@ -11,7 +11,8 @@ import {
   type KBItemService,
   type KBVoteService,
 } from "./service.js";
-import { NotFoundError } from "../errors.js";
+import { ConflictError, NotFoundError } from "../errors.js";
+import { ErrorCode } from "@care-y/shared";
 import type { KbCategoryId, KbItemId, UserId } from "@care-y/shared";
 
 // Branded test constants. KB uses its own id family (KbCategoryId, KbItemId,
@@ -463,7 +464,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     );
   });
 
-  it("category delete fails when articles exist (RESTRICT FK)", async () => {
+  it("category delete throws KB_CATEGORY_HAS_ARTICLES when articles exist", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Has Articles"),
       orgKeyGeneration: 1,
@@ -474,8 +475,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedBody: Buffer.from("body"),
       orgKeyGeneration: 1,
     });
-    // RESTRICT FK prevents category deletion
-    await expect(catSvc.delete(cat.id)).rejects.toThrow();
+    // The RESTRICT foreign key refuses the delete and the service maps
+    // the violation to a ConflictError
+    const rejection = expect(catSvc.delete(cat.id)).rejects;
+    await rejection.toThrow(ConflictError);
+    await rejection.toMatchObject({
+      message: ErrorCode.KB_CATEGORY_HAS_ARTICLES,
+    });
   });
 
   it("category list counts the articles in each category", async () => {

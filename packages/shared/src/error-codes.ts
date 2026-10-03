@@ -107,6 +107,8 @@ export const ErrorCode = {
   KB_CATEGORY_NOT_FOUND: "KB_CATEGORY_NOT_FOUND",
   KB_ARTICLE_NOT_FOUND: "KB_ARTICLE_NOT_FOUND",
   KB_ATTACHMENT_NOT_FOUND: "KB_ATTACHMENT_NOT_FOUND",
+  /** Category delete refused: articles are still filed under it. */
+  KB_CATEGORY_HAS_ARTICLES: "KB_CATEGORY_HAS_ARTICLES",
 
   // --- Onboarding ---
   ORG_ALREADY_SETUP: "ORG_ALREADY_SETUP",
