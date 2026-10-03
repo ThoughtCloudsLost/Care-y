@@ -141,8 +141,10 @@
   let loginError = $state(false);
   let loginPhase = $state<LoginPhaseId>("idle");
   let signedOutMessage = $state("");
-  // Bumped on each sign-out, so only the latest revoke may write the note
-  let logoutGeneration = 0;
+  // Advances on every sign-in and sign-out; a password change keeps the
+  // session and does not advance it. A request that settles late writes
+  // only when no newer session or sign-out has happened since it began.
+  let sessionGeneration = 0;
   let changePasswordPending = $state(false);
   let changePasswordError = $state("");
   let hintShown = $state(false);
@@ -190,6 +192,7 @@
 
     // The server window only slides on human activity, throttled; sign-in
     // has just opened a fresh one.
+    const generation = sessionGeneration;
     const renewer = createAccountSessionRenewer({
       renew: async () =>
         requireRouter(
@@ -197,9 +200,9 @@
           "clientPortal",
         ).accountSessionRenew.mutate(),
       onUnauthorized: () => {
-        // A renewal sent before sign-out can answer after it; the session
-        // has already ended and its sign-out note stays.
-        if (session === null) return;
+        // A late answer from a renewer that belongs to an earlier session
+        // is ignored, so it cannot end a newer one or replace its note.
+        if (generation !== sessionGeneration || session === null) return;
         returnToLogin(m.account_signed_out());
       },
     });
@@ -332,6 +335,7 @@
             bridge.encryptReply(text, orgPub, tid, fid, kg),
         };
 
+        sessionGeneration++;
         session = handle;
         loginUsername = username;
         loginError = false;
@@ -695,7 +699,7 @@
   async function handleLogout(): Promise<void> {
     // No earlier note shows while this revoke is in flight
     signedOutMessage = "";
-    const generation = ++logoutGeneration;
+    const generation = ++sessionGeneration;
     // Keys leave memory before the network call: revoking needs only the
     // session cookie, and a slow or hanging request must not keep them.
     returnToLogin();
@@ -703,7 +707,7 @@
     // A revoke that settles after a newer sign-out, or after the user signed
     // in again, leaves the current state alone
     function settleSignOut(message: string): void {
-      if (generation === logoutGeneration && session === null) {
+      if (generation === sessionGeneration && session === null) {
         signedOutMessage = message;
       }
     }

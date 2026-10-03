@@ -565,12 +565,16 @@ async function signIn(): Promise<MockWorkerInstance> {
 }
 
 /**
- * Submit the login form already on the page and wait until the drawer
+ * Wait for the login form, submit it, and wait until the drawer
  * publishes the logout action. Returns the new session's worker.
  */
 async function submitLogin(): Promise<MockWorkerInstance> {
-  const form = document.querySelector("form");
-  if (form === null) throw new Error("login form not rendered");
+  // A sign-out just before this re-renders the login form on the next tick
+  const form = await vi.waitFor(() => {
+    const found = document.querySelector("form");
+    if (found === null) throw new Error("login form not rendered");
+    return found;
+  });
   const workersBefore = mockWorkerInstances.length;
   const inputs = form.querySelectorAll("input");
   const usernameInput = inputs[0];
@@ -631,6 +635,11 @@ function unauthorizedError(): TRPCClientError<never> {
     },
   });
 }
+
+// Page idle timeout
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+// IdleTimer polling interval
+const IDLE_CHECK_INTERVAL_MS = 30_000;
 
 // -- Tests --------------------------------------------------------------------
 
@@ -905,6 +914,84 @@ describe("account page", () => {
         await flushSettled();
 
         expect(signedOutNoteText()).toBe("Signed out voluntary");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a revoke that settles after a later session timed out leaves the timeout note", async () => {
+      // Fake the clock and the idle timer's polling interval; promises and
+      // waitFor keep running on real timers
+      vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+      try {
+        await signIn();
+        let settleRevoke: (() => void) | undefined;
+        mockAccountLogout.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              settleRevoke = () => {
+                resolve({});
+              };
+            }),
+        );
+
+        clickLogout();
+        expect(mockAccountLogout).toHaveBeenCalledOnce();
+
+        await submitLogin();
+
+        vi.setSystemTime(Date.now() + IDLE_TIMEOUT_MS + 1);
+        vi.advanceTimersByTime(IDLE_CHECK_INTERVAL_MS);
+        await vi.waitFor(() => {
+          expect(signedOutNoteText()).toBe("Signed out");
+        });
+
+        settleRevoke?.();
+        await flushSettled();
+
+        expect(signedOutNoteText()).toBe("Signed out");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a stale renewal failure from a previous session does not wipe the new one", async () => {
+      // Fake only the clock, so the renewal throttle can be passed while
+      // promises and waitFor keep running on real timers
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await signIn();
+
+        let failRenewal: (() => void) | undefined;
+        mockAccountSessionRenew.mockImplementationOnce(
+          () =>
+            new Promise((_resolve, reject) => {
+              failRenewal = () => {
+                reject(unauthorizedError());
+              };
+            }),
+        );
+
+        vi.setSystemTime(Date.now() + ACCOUNT_SESSION_RENEW_INTERVAL_MS + 1);
+        await fireEvent.keyDown(document);
+        expect(mockAccountSessionRenew).toHaveBeenCalledOnce();
+
+        mockAccountLogout.mockResolvedValueOnce({});
+        clickLogout();
+        await vi.waitFor(() => {
+          expect(signedOutNoteText()).toBe("Signed out voluntary");
+        });
+
+        await submitLogin();
+
+        failRenewal?.();
+        await flushSettled();
+
+        // The new session is still live and no note is set
+        expect(capturedShellState?.actions.some((a) => a.id === "logout")).toBe(
+          true,
+        );
+        expect(signedOutNoteText()).toBeNull();
       } finally {
         vi.useRealTimers();
       }
