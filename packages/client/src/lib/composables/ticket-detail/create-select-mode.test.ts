@@ -480,20 +480,34 @@ describe("createSelectMode", () => {
       expect(sm.selectedIds.size).toBe(0);
     });
 
-    it("uses empty content string when keyWrap is null", async () => {
-      const writeText = vi
-        .fn<(text: string) => Promise<void>>()
-        .mockResolvedValue(undefined);
-      Object.assign(navigator, { clipboard: { writeText } });
+    it.each([
+      ["null", null],
+      ["undefined", undefined],
+    ] as const)(
+      "writes the access-denied marker when the ticket key wrap is %s",
+      async (_label, keyWrap) => {
+        const writeText = vi
+          .fn<(text: string) => Promise<void>>()
+          .mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+        const decryptContent = vi.fn(() => "should not be read");
 
-      const sm = createSelectMode(makeConfig({ getTicketKeyWrap: () => null }));
-      sm.toggle("fu-no-key");
+        const sm = createSelectMode(
+          makeConfig({
+            getTicketKeyWrap: () => keyWrap,
+            followUpCache: {
+              decryptContent,
+            } as unknown as SelectModeConfig["followUpCache"],
+          }),
+        );
+        sm.toggle("fu-no-key");
 
-      await sm.copySelected([makeFollowUp({ id: "fu-no-key" })]);
+        await sm.copySelected([makeFollowUp({ id: "fu-no-key" })]);
 
-      const clipboardText = writeText.mock.calls[0]![0] as string;
-      // When keyWrap is null, content block is skipped, so content is empty ""
-      expect(clipboardText).toMatch(/: $/);
-    });
+        const clipboardText = writeText.mock.calls[0]![0] as string;
+        expect(clipboardText).toMatch(/calm-pebble-7: \[access denied\]$/);
+        expect(decryptContent).not.toHaveBeenCalled();
+      },
+    );
   });
 });
