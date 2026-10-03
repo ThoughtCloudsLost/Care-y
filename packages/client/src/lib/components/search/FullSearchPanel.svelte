@@ -5,6 +5,7 @@
     runFullSearch,
     getFullSearchStates,
     hasFullSearch,
+    UNSCOPED_SCOPE_KEY,
   } from "$lib/search/registry.svelte.js";
   import type { SearchResultGroup } from "$lib/search/types.js";
 
@@ -16,7 +17,11 @@
 
   let { query, groups, hasAnyResults }: FullSearchPanelProps = $props();
 
-  const states = $derived(getFullSearchStates());
+  // The global search is unscoped. A run the tickets page scoped to its
+  // filters covers another set, so the panel treats it as not run.
+  const states = $derived(
+    getFullSearchStates().filter((s) => s.scopeKey === UNSCOPED_SCOPE_KEY),
+  );
   const isSearching = $derived(states.some((s) => s.status === "searching"));
   const isDone = $derived(
     states.length > 0 && states.every((s) => s.status === "done"),

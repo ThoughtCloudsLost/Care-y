@@ -7,6 +7,7 @@ import type {
 import { createTicketSearchProvider, ticketSearchScope } from "./tickets.js";
 import type { TicketListServerParams } from "$lib/stores/filters.svelte.js";
 import type { CoverageState, FullSearchState } from "../types.js";
+import { fullSearchScopeKey } from "../registry.svelte.js";
 import type * as Messages from "$lib/paraglide/messages.js";
 import type * as WithTermsModule from "$lib/terminology/with-terms.js";
 import type * as AsyncDecryptCacheModule from "$lib/crypto/async-decrypt-cache.js";
@@ -368,6 +369,7 @@ describe("ticket fullSearch (two-phase)", () => {
     failListAllAt?: number;
     getTotalItemCount?: () => number | undefined;
     contentSearch?: TicketSearchProviderDeps["contentSearch"];
+    ingestTickets?: TicketSearchProviderDeps["ingestTickets"];
   }): ReturnType<typeof createTicketSearchProvider> {
     const pages = overrides.listAllPages ?? [];
     let pageIndex = 0;
@@ -393,7 +395,7 @@ describe("ticket fullSearch (two-phase)", () => {
         overrides.onListAll?.();
         return page;
       }),
-      ingestTickets: vi.fn(),
+      ingestTickets: overrides.ingestTickets ?? vi.fn(),
       whenDecryptsSettled: vi.fn(async () => undefined),
       decryptFollowUp: vi.fn((_tid: string, fid: string) => decryptedFu[fid]),
       contentSearch:
@@ -553,6 +555,66 @@ describe("ticket fullSearch (two-phase)", () => {
     const { results } = provider.search("housing");
     expect(results.some((r) => r.id === "t1")).toBe(true);
     expect(results.some((r) => r.id === "t3")).toBe(true);
+  });
+
+  it("leaves the fullSearch cache entry alone on a scoped run", async () => {
+    const ingestTickets = vi.fn();
+    const provider = createFullSearchProvider({
+      listAllPages: [[makeRawTicket({ id: "t1", keyWrap: KW })]],
+      ingestTickets,
+    });
+
+    await provider.fullSearch!("Housing", makeState(), vi.fn(), liveSignal(), {
+      queueIds: ["q1"],
+    });
+
+    expect(ingestTickets).not.toHaveBeenCalled();
+  });
+
+  it("writes the fullSearch cache entry on an unscoped run", async () => {
+    const ingestTickets = vi.fn();
+    const provider = createFullSearchProvider({
+      listAllPages: [[makeRawTicket({ id: "t1", keyWrap: KW })]],
+      ingestTickets,
+    });
+
+    await provider.fullSearch!("Housing", makeState(), vi.fn(), liveSignal());
+
+    expect(ingestTickets).toHaveBeenCalledOnce();
+    expect(ingestTickets).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "t1" }),
+    ]);
+  });
+
+  it("keeps a scoped run's content matches out of search()", async () => {
+    const tickets = [
+      makeRawTicket({ id: "t1", keyWrap: KW }),
+      makeRawTicket({ id: "t2", keyWrap: KW }),
+      makeRawTicket({ id: "t3", keyWrap: KW }),
+    ];
+
+    const provider = createFullSearchProvider({
+      listAllPages: [tickets],
+      contentSearchFollowups: [
+        {
+          ticketId: "t3",
+          followupId: "fu-1",
+          encryptedContent: "encrypted-note",
+        },
+      ],
+      decryptedFollowUps: {
+        "fu-1": "This note discusses housing policy",
+      },
+    });
+
+    await provider.fullSearch!("housing", makeState(), vi.fn(), liveSignal(), {
+      queueIds: ["q1"],
+    });
+
+    expect(provider.getContentMatchIds!().has("t3")).toBe(true);
+    expect(provider.search("housing").results.some((r) => r.id === "t3")).toBe(
+      false,
+    );
   });
 
   it("updates progress state across both phases", async () => {
@@ -819,6 +881,45 @@ describe("ticketSearchScope", () => {
     expect(scope).not.toHaveProperty("sortBy");
     expect(scope).not.toHaveProperty("sortDirection");
     expect(scope).not.toHaveProperty("limit");
+  });
+
+  it("returns undefined when no server filter is set", () => {
+    expect(
+      ticketSearchScope({ sortBy: "date", sortDirection: "desc", limit: 50 }),
+    ).toBeUndefined();
+  });
+
+  it("treats an unassigned filter as a scope", () => {
+    expect(
+      ticketSearchScope({
+        sortBy: "date",
+        sortDirection: "desc",
+        limit: 50,
+        assignedTo: null,
+      }),
+    ).toEqual({ assignedTo: null });
+  });
+
+  it("gives the same key for the same selection in another order, without reordering the params", () => {
+    const a: TicketListServerParams = {
+      sortBy: "date",
+      sortDirection: "desc",
+      limit: 50,
+      queueIds: ["q2", "q1"],
+      priorities: ["urgent", "high"],
+    };
+    const b: TicketListServerParams = {
+      sortBy: "date",
+      sortDirection: "desc",
+      limit: 50,
+      queueIds: ["q1", "q2"],
+      priorities: ["high", "urgent"],
+    };
+
+    expect(fullSearchScopeKey(ticketSearchScope(a))).toBe(
+      fullSearchScopeKey(ticketSearchScope(b)),
+    );
+    expect(a.queueIds).toEqual(["q2", "q1"]);
   });
 });
 

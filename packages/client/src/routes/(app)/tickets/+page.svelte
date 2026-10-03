@@ -1042,6 +1042,12 @@
     },
   });
 
+  // Widening the search from the search bar clears the filters but keeps
+  // match-first ordering, which the shared onchange would turn off.
+  function clearFiltersFromSearch(): void {
+    dispatch.clearAll({ skipOnchange: true });
+  }
+
   const datePill = $derived(ticketDatePillProps(filterStore));
 
   const filterSummary = $derived(
@@ -1229,7 +1235,9 @@
           withTerms({ searched: deepSearch.searched, total: deepSearch.total }),
         )
       : undefined}
-    onclearfilters={filterStore.activeCount > 0 ? dispatch.clearAll : undefined}
+    onclearfilters={filterStore.activeCount > 0
+      ? clearFiltersFromSearch
+      : undefined}
     clearFiltersLabel={filterStore.activeCount > 0
       ? m.search_filter_scoped_clear(withTerms())
       : undefined}

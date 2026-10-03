@@ -5,6 +5,7 @@ import {
   providerHasFullSearch,
   runFullSearchForProvider,
   resetFullSearchForProvider,
+  fullSearchScopeKey,
 } from "./registry.svelte.js";
 import type { SearchOverlay } from "./search-overlay.svelte.js";
 
@@ -40,8 +41,8 @@ export interface DeepSearchOptions {
   /**
    * Reactive getter for the provider-specific filter scope of a run. Read
    * when the run starts and handed to the provider's fullSearch; a change to
-   * it reruns a started run over the new scope. Omit on a surface with no
-   * filters.
+   * it reruns a started run over the new scope. Omit it, or return
+   * undefined, when no filter is set.
    */
   fullSearchScope?: () => unknown;
 }
@@ -148,7 +149,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   }
 
   function currentScopeKey(): string {
-    return JSON.stringify(options.fullSearchScope?.() ?? null);
+    return fullSearchScopeKey(options.fullSearchScope?.());
   }
 
   function finishRun(): void {
@@ -181,7 +182,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
 
     searchTerm = term;
     runScope = options.fullSearchScope?.();
-    runScopeKey = JSON.stringify(runScope ?? null);
+    runScopeKey = fullSearchScopeKey(runScope);
 
     // Fetch all remaining pages into the list view.
     //
@@ -217,8 +218,9 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
       }
     }
 
-    // Content search (skip if search sheet already completed it)
-    if (fsState?.status === "done") {
+    // Content search, skipped when a completed run over the same scope is
+    // already there. A run over another scope covers a different set.
+    if (fsState?.status === "done" && fsState.scopeKey === runScopeKey) {
       finishRun();
     } else {
       phase = "content";

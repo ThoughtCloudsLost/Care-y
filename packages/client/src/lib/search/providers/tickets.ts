@@ -5,6 +5,7 @@ import type {
   SearchResult,
 } from "../types.js";
 import { fuzzySearch } from "../fuzzy.js";
+import { fullSearchScopeKey, UNSCOPED_SCOPE_KEY } from "../registry.svelte.js";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import {
   mapTicketDisplayFields,
@@ -51,19 +52,29 @@ export type TicketSearchScope = Omit<
   "sortBy" | "sortDirection" | "limit"
 >;
 
-/** The filter fields of the list's server params, for a scoped run. */
+/**
+ * The filter fields of the list's server params, for a scoped run, or
+ * undefined when no server filter is set. Array fields are sorted, so the
+ * same selection made in another order gives the same scope key.
+ */
 export function ticketSearchScope(
   params: TicketListServerParams,
-): TicketSearchScope {
-  return {
+): TicketSearchScope | undefined {
+  const scope: TicketSearchScope = {
     statuses: params.statuses,
     onHold: params.onHold,
-    queueIds: params.queueIds,
-    priorities: params.priorities,
+    queueIds:
+      params.queueIds === undefined ? undefined : [...params.queueIds].sort(),
+    priorities:
+      params.priorities === undefined
+        ? undefined
+        : [...params.priorities].sort(),
     assignedTo: params.assignedTo,
     createdAfter: params.createdAfter,
     createdBefore: params.createdBefore,
   };
+  const values: readonly unknown[] = Object.values(scope);
+  return values.every((value) => value === undefined) ? undefined : scope;
 }
 
 interface KeyWrap {
@@ -147,6 +158,10 @@ export function createTicketSearchProvider(
   // SvelteSet so search() reads are tracked in $derived contexts.
   const contentMatchIds = new SvelteSet<string>();
   let lastFullSearchQuery = "";
+  // Scope key of the run that filled contentMatchIds. search() serves the
+  // global search, which is unscoped, so it only adds content matches from
+  // an unscoped run.
+  let lastFullSearchScopeKey = UNSCOPED_SCOPE_KEY;
 
   function composeSearchData(
     raw: RawCachedTicket,
@@ -258,7 +273,11 @@ export function createTicketSearchProvider(
       // Include content-matched tickets from fullSearch content search.
       // SvelteSet.has() is tracked in $derived, so additions from async
       // fullSearch trigger re-evaluation automatically.
-      if (query === lastFullSearchQuery && contentMatchIds.size > 0) {
+      if (
+        query === lastFullSearchQuery &&
+        lastFullSearchScopeKey === UNSCOPED_SCOPE_KEY &&
+        contentMatchIds.size > 0
+      ) {
         for (const entry of searchable) {
           if (contentMatchIds.has(entry.raw.id) && !seen.has(entry.raw.id)) {
             seen.add(entry.raw.id);
@@ -310,6 +329,7 @@ export function createTicketSearchProvider(
     reset() {
       contentMatchIds.clear();
       lastFullSearchQuery = "";
+      lastFullSearchScopeKey = UNSCOPED_SCOPE_KEY;
       deps.clearFollowUpCache?.();
     },
   };
@@ -348,6 +368,7 @@ export function createTicketSearchProvider(
 
       contentMatchIds.clear();
       lastFullSearchQuery = query;
+      lastFullSearchScopeKey = fullSearchScopeKey(scope);
 
       // -- title search: load all tickets into TanStack cache, decrypt titles --
       let cursor: string | undefined;
@@ -400,7 +421,11 @@ export function createTicketSearchProvider(
       state.total = totalLoaded;
       onProgress();
 
-      ingestTickets(allTickets);
+      // The fullSearch cache entry is replaced whole, so a scoped run leaves
+      // it alone: writing the filtered subset would drop tickets an earlier
+      // unscoped run put there. The page's own list query already holds the
+      // scoped tickets, and title matching reads every tickets list entry.
+      if (scope === undefined) ingestTickets(allTickets);
       await whenDecryptsSettled();
       if (aborted()) return;
 

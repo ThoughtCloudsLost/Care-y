@@ -454,6 +454,61 @@ describe("createDeepSearch", () => {
       expect(h.ds.total).toBe(12);
     });
 
+    it("starts a scoped run instead of reusing an unscoped completed run", async () => {
+      const p = registerFullSearchProvider();
+      runFullSearchForProvider("tickets", "harbor");
+      await settle();
+      p.runs[0]?.finish({ searched: 12, total: 12, matchCount: 3 });
+      await settle();
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      expect(p.runs).toHaveLength(2);
+      expect(p.runs[1]?.scope).toEqual({ queueIds: ["q1"] });
+      expect(h.ds.status).toBe("searching");
+    });
+
+    it("starts an unscoped run instead of reusing a completed scoped run", async () => {
+      const p = registerFullSearchProvider();
+      runFullSearchForProvider("tickets", "harbor", { queueIds: ["q1"] });
+      await settle();
+      p.runs[0]?.finish({ searched: 12, total: 12, matchCount: 3 });
+      await settle();
+      const h = createHarness({ hasNext: false });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      expect(p.runs).toHaveLength(2);
+      expect(p.runs[1]?.scope).toBeUndefined();
+      expect(h.ds.status).toBe("searching");
+    });
+
+    it("reuses a completed run over the same scope", async () => {
+      const p = registerFullSearchProvider();
+      runFullSearchForProvider("tickets", "harbor", { queueIds: ["q1"] });
+      await settle();
+      p.runs[0]?.finish({ searched: 12, total: 12, matchCount: 3 });
+      await settle();
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+
+      expect(p.runs).toHaveLength(1);
+      expect(h.ds.status).toBe("done");
+      expect(h.ds.searched).toBe(12);
+      expect(h.ds.total).toBe(12);
+    });
+
     it("hands the page's filter scope to the provider run", async () => {
       const p = registerFullSearchProvider();
       const h = createHarness({
