@@ -7,10 +7,10 @@ import {
   fireEvent,
   type RenderResult,
 } from "@testing-library/svelte";
-import { TRPCClientError } from "@trpc/client";
 import NewTicketForm from "./NewTicketForm.svelte";
 import { resolveQueueAppearance } from "$lib/utils/queue-appearance.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
+import { ClientError, LookupFailedError } from "$lib/errors.js";
 import type * as ErrorsNS from "$lib/errors.js";
 import type * as ContextNS from "$lib/shell/context.js";
 import type * as OrgSlugNS from "$lib/utils/org-slug.js";
@@ -269,14 +269,12 @@ describe("NewTicketForm", () => {
       return { view, titleInput: titleInput!, onsubmit };
     }
 
-    function networkFailure(): Error {
-      return TRPCClientError.from(new TypeError("Failed to fetch"));
-    }
-
-    it("reports a failed create-target lookup as a connection problem", async () => {
+    it("shows the lookup's own message when the create-target lookup fails", async () => {
       const resolveCreateTarget = vi
         .fn<(clientId: string) => Promise<CreateTarget>>()
-        .mockRejectedValue(networkFailure());
+        .mockRejectedValue(
+          new LookupFailedError("You do not have permission to do this."),
+        );
       const fetchQueueMemberKeys = vi
         .fn<(queueId: string) => Promise<MemberKeys>>()
         .mockResolvedValue([]);
@@ -286,20 +284,22 @@ describe("NewTicketForm", () => {
         fetchQueueMemberKeys,
       );
 
-      expect(await view.findByText("Could not reach the server")).toBeTruthy();
+      expect(
+        await view.findByText("You do not have permission to do this."),
+      ).toBeTruthy();
       expect(view.queryByText("Could not encrypt ticket data")).toBeNull();
       expect(mockCreateTicketEncryption).not.toHaveBeenCalled();
       expect(onsubmit).not.toHaveBeenCalled();
       expect(titleInput.value).toBe("Rent help");
     });
 
-    it("reports a failed recipient key lookup as a connection problem", async () => {
+    it("shows the lookup's own message when the recipient key lookup fails", async () => {
       const resolveCreateTarget = vi
         .fn<(clientId: string) => Promise<CreateTarget>>()
         .mockResolvedValue({ openTicketId: null, reopenTicketId: null });
       const fetchQueueMemberKeys = vi
         .fn<(queueId: string) => Promise<MemberKeys>>()
-        .mockRejectedValue(networkFailure());
+        .mockRejectedValue(new LookupFailedError("Could not reach the server"));
 
       const { view, titleInput, onsubmit } = await renderAndSubmit(
         resolveCreateTarget,
@@ -336,6 +336,53 @@ describe("NewTicketForm", () => {
       expect(view.queryByText("Could not reach the server")).toBeNull();
       expect(onsubmit).not.toHaveBeenCalled();
       expect(titleInput.value).toBe("Rent help");
+    });
+
+    it("reports a missing encrypted field as an encryption problem", async () => {
+      const resolveCreateTarget = vi
+        .fn<(clientId: string) => Promise<CreateTarget>>()
+        .mockResolvedValue({ openTicketId: null, reopenTicketId: null });
+      const fetchQueueMemberKeys = vi
+        .fn<(queueId: string) => Promise<MemberKeys>>()
+        .mockResolvedValue([]);
+      mockCreateTicketEncryption.mockResolvedValueOnce({
+        encryptedFields: [{ name: "description", ciphertext: "c2" }],
+        keyGeneration: "1",
+        keyWraps: [],
+      });
+
+      const { view, titleInput, onsubmit } = await renderAndSubmit(
+        resolveCreateTarget,
+        fetchQueueMemberKeys,
+      );
+
+      expect(
+        await view.findByText("Could not encrypt ticket data"),
+      ).toBeTruthy();
+      expect(onsubmit).not.toHaveBeenCalled();
+      expect(titleInput.value).toBe("Rent help");
+    });
+
+    it("reports a worker that is not ready as an encryption problem", async () => {
+      const resolveCreateTarget = vi
+        .fn<(clientId: string) => Promise<CreateTarget>>()
+        .mockResolvedValue({ openTicketId: null, reopenTicketId: null });
+      const fetchQueueMemberKeys = vi
+        .fn<(queueId: string) => Promise<MemberKeys>>()
+        .mockResolvedValue([]);
+      mockCreateTicketEncryption.mockRejectedValueOnce(
+        new ClientError("Crypto worker is not ready."),
+      );
+
+      const { view, onsubmit } = await renderAndSubmit(
+        resolveCreateTarget,
+        fetchQueueMemberKeys,
+      );
+
+      expect(
+        await view.findByText("Could not encrypt ticket data"),
+      ).toBeTruthy();
+      expect(onsubmit).not.toHaveBeenCalled();
     });
   });
 });

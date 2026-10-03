@@ -2,6 +2,7 @@
   New ticket sheet controller.
   Owns data fetching (queues), mutation (createTicket), and collision navigation.
   Same pattern as InternalNoteSheet / DisplayNameSheet.
+  Also classifies lookup failures so the form can show the right message.
 -->
 <script lang="ts">
   import {
@@ -20,7 +21,11 @@
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { LookupFailedError, requireRouter } from "$lib/errors.js";
+  import {
+    getErrorMessage,
+    isErrorCode,
+  } from "$lib/components/query-error-messages.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
 
@@ -91,6 +96,23 @@
     oncollision(ticketId);
   }
 
+  /**
+   * Runs one of the form's lookups and turns a rejection into a
+   * LookupFailedError carrying the message to show: the mapped text when
+   * the server sent a known error code, otherwise the connection message.
+   */
+  async function lookup<T>(call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (err: unknown) {
+      throw new LookupFailedError(
+        err instanceof Error && isErrorCode(err.message)
+          ? getErrorMessage(err)
+          : m.error_network(),
+      );
+    }
+  }
+
   const clientSearch = createClientSelectSearch({
     ticketRouter,
     orgCache,
@@ -117,9 +139,11 @@
   {/snippet}
   <NewTicketForm
     resolveCreateTarget={async (clientId: string) =>
-      ticketRouter.resolveCreateTarget.query({ clientId })}
+      lookup(async () => ticketRouter.resolveCreateTarget.query({ clientId }))}
     fetchQueueMemberKeys={async (qId: string) =>
-      ticketRouter.listQueueMemberPublicKeys.query({ queueId: qId })}
+      lookup(async () =>
+        ticketRouter.listQueueMemberPublicKeys.query({ queueId: qId }),
+      )}
     queues={decryptedQueues}
     searchClients={clientSearch.search}
     phoneLookup={clientSearch.phoneLookup}

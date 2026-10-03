@@ -27,7 +27,6 @@
   /* eslint-disable @typescript-eslint/no-unsafe-assignment -- $state<Record> proxy assignments; types are correct */
   /* eslint-disable @typescript-eslint/strict-boolean-expressions -- $derived proxy values flagged as any */
   import { List, ListInput, Preloader } from "konsta/svelte";
-  import { isTRPCClientError } from "@trpc/client";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
@@ -43,7 +42,7 @@
     ClientSearchResult,
     PhoneLookupResult,
   } from "$lib/components/inputs/ClientSelect.svelte";
-  import { ClientError } from "$lib/errors.js";
+  import { ClientError, LookupFailedError } from "$lib/errors.js";
   import { PRIORITY_OPTIONS } from "$lib/tickets/priority-labels.js";
   import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
@@ -58,14 +57,16 @@
      * Resolves what ticket the create will land on for an existing client
      * (open ticket blocks, closed ticket reopens under its old id). The
      * AAD binds the ticket id at encrypt time, so the form must know the
-     * target id before encrypting (ADR-053).
+     * target id before encrypting (ADR-053). A rejection should be a
+     * LookupFailedError whose message the form shows.
      */
     resolveCreateTarget: (clientId: string) => Promise<{
       openTicketId: string | null;
       reopenTicketId: string | null;
     }>;
     /** Fetches active, onboarded queue members with their vol_public keys
-     *  so the worker can wrap tk for the full recipient set. */
+     *  so the worker can wrap tk for the full recipient set. A rejection
+     *  should be a LookupFailedError whose message the form shows. */
     fetchQueueMemberKeys: (
       queueId: string,
     ) => Promise<readonly { volunteerId: string; volPublic: string }[]>;
@@ -180,12 +181,15 @@
           : { clientToken: selection.token }),
       });
     } catch (err: unknown) {
-      // The two lookups run before any plaintext is encrypted, so a
-      // failed request reads as a connection problem and leaves the form
-      // filled in for a retry. Only the worker reports encryption failure.
-      if (isTRPCClientError(err)) {
-        errors = { form: m.error_network() };
-      } else if (err instanceof CryptoWorkerError) {
+      // The parent turns a failed lookup into a LookupFailedError whose
+      // message is ready to show; the form stays filled in for a retry.
+      // Anything else the worker path throws is an encryption failure.
+      if (err instanceof LookupFailedError) {
+        errors = { form: err.message };
+      } else if (
+        err instanceof CryptoWorkerError ||
+        err instanceof ClientError
+      ) {
         errors = { form: m.ticket_new_error_encrypt_failed(withTerms()) };
       } else {
         throw err;
