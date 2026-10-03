@@ -3,6 +3,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
+import { InternalError } from "../errors.js";
 import {
   createTestDb,
   createTestQueue,
@@ -310,5 +311,57 @@ describe("PhoneLookupService.storePendingClient", () => {
 
     first.fill(0);
     second.fill(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lookupPhone query failure (no DB required)
+// ---------------------------------------------------------------------------
+
+describe("PhoneLookupService.lookupPhone when a query fails", () => {
+  it("zeroes the OPS-encrypted phone and rethrows the query error", async () => {
+    const encryptedOutputs: Buffer[] = [];
+    const encryptor: FieldEncryptor = {
+      encrypt(plaintext: string): Buffer {
+        const out = testFieldEncryptor.encrypt(plaintext);
+        encryptedOutputs.push(out);
+        return out;
+      },
+      encryptBuffer(plaintext: Buffer): Buffer {
+        return testFieldEncryptor.encryptBuffer(plaintext);
+      },
+      decrypt(ciphertext: Buffer): string {
+        return testFieldEncryptor.decrypt(ciphertext);
+      },
+      decryptToBuffer(ciphertext: Buffer): Buffer {
+        return testFieldEncryptor.decryptToBuffer(ciphertext);
+      },
+    };
+    const queryError = new InternalError("query failed");
+    // Every query starts with selectFrom, so the phone lookup by hash fails
+    // after the OPS-encrypted phone has been produced.
+    const failingDb = {
+      selectFrom(): never {
+        throw queryError;
+      },
+    } as unknown as Kysely<TenantDatabase>;
+    const svc = createPhoneLookupService({
+      db: failingDb,
+      indexer: testBlindIndexer,
+      encryptor,
+      orgId: TEST_ORG_ID,
+      orgSchema: TEST_ORG_SCHEMA,
+      pendingClients: new Map<string, PendingClient>(),
+    });
+    const phoneBuf = Buffer.from(uniquePhone(), "utf-8");
+
+    await expect(svc.lookupPhone(phoneBuf)).rejects.toBe(queryError);
+
+    expect(encryptedOutputs).toHaveLength(1);
+    const encrypted = encryptedOutputs[0];
+    expect(encrypted).toBeDefined();
+    expect(encrypted?.every((byte) => byte === 0)).toBe(true);
+
+    phoneBuf.fill(0);
   });
 });

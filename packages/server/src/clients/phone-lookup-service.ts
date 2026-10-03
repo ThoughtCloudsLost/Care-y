@@ -98,39 +98,46 @@ export function createPhoneLookupService(
         opsEncryptedPhone = encryptor.encrypt(phoneStr);
       }
 
-      const phoneRepo = createPhoneRepository(db);
-      const existingPhone = await phoneRepo.findByHash(phoneHash);
+      try {
+        const phoneRepo = createPhoneRepository(db);
+        const existingPhone = await phoneRepo.findByHash(phoneHash);
 
-      if (existingPhone) {
-        const client = await db
-          .selectFrom("clients")
-          .select(["id", "encrypted_alias"])
-          .where("phone_id", "=", existingPhone.id)
-          .where("merged_into", "is", null)
-          .executeTakeFirst();
-
-        if (client) {
-          const openTicket = await db
-            .selectFrom("tickets")
-            .select("id")
-            .where("client_id", "=", client.id)
-            .where("status", "=", "open")
+        if (existingPhone) {
+          const client = await db
+            .selectFrom("clients")
+            .select(["id", "encrypted_alias"])
+            .where("phone_id", "=", existingPhone.id)
+            .where("merged_into", "is", null)
             .executeTakeFirst();
 
-          // Existing client found: zero the pre-computed OPS-encrypted phone
-          // since we won't need it for a pending token.
-          opsEncryptedPhone.fill(0);
+          if (client) {
+            const openTicket = await db
+              .selectFrom("tickets")
+              .select("id")
+              .where("client_id", "=", client.id)
+              .where("status", "=", "open")
+              .executeTakeFirst();
 
-          return {
-            found: true,
-            clientId: client.id,
-            encryptedAlias: client.encrypted_alias,
-            openTicketId: openTicket?.id ?? null,
-          };
+            // Existing client found: zero the pre-computed OPS-encrypted phone
+            // since we won't need it for a pending token.
+            opsEncryptedPhone.fill(0);
+
+            return {
+              found: true,
+              clientId: client.id,
+              encryptedAlias: client.encrypted_alias,
+              openTicketId: openTicket?.id ?? null,
+            };
+          }
         }
-      }
 
-      return { found: false, pending: { phoneHash, opsEncryptedPhone } };
+        return { found: false, pending: { phoneHash, opsEncryptedPhone } };
+      } catch (err: unknown) {
+        // No caller receives the OPS-encrypted phone when a query fails, so
+        // zero it here before the error propagates.
+        opsEncryptedPhone.fill(0);
+        throw err;
+      }
     },
 
     storePendingClient(pending, phoneMatchHash): string {
