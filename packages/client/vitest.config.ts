@@ -41,6 +41,10 @@ export default defineConfig({
   test: {
     name: "client",
     include: ["src/**/*.test.ts"],
+    // Four jsdom workers on a shared runner starve the odd one-second wait
+    // (SecureLinkSheet on 2026-10-02). One retry there, none locally, so a
+    // regression stays loud on the machine where it is being fixed.
+    retry: process.env.CI ? 1 : 0,
     exclude: ["**/dist/**", "**/node_modules/**"],
     setupFiles: ["src/test-setup.ts"],
     coverage: {
