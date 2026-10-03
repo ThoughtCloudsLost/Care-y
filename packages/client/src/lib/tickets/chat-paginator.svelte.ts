@@ -13,6 +13,9 @@
 
 import type { QueryClient } from "@tanstack/svelte-query";
 
+/** Messages per page for every chat thread that pages through this module. */
+export const CHAT_PAGE_SIZE = 50;
+
 /** Minimal constraint for records managed by the paginator. */
 export interface PaginatedRecord {
   id: string;
@@ -89,7 +92,7 @@ export function createChatPaginator<T extends PaginatedRecord>(
 
     // When the paginator has only a single page, the refetch data is the
     // complete window and a wholesale replace is safe. When multiple pages
-    // exist, the refetch covers the newest PAGE_SIZE messages, whose lower
+    // exist, the refetch covers the newest pageSize messages, whose lower
     // boundary can shift relative to the adjacent older page. A wholesale
     // replace would create a gap or overlap at that seam. Instead, keep
     // the existing page entries stable and merge changes at the tail.
