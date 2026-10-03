@@ -345,7 +345,7 @@ const expectedMessages: Array<{ code: ErrorCodeType; expected: string }> = [
   },
   {
     code: ErrorCode.KB_CATEGORY_HAS_ARTICLES,
-    expected: m.library_category_delete_blocked(),
+    expected: m.error_kb_category_has_articles(),
   },
 
   // Onboarding
