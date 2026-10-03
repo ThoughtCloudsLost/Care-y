@@ -10,8 +10,8 @@ export interface CoverageState {
   /** Total items in the dataset, when known (the provider's totalItems). */
   readonly total: number | undefined;
   /** Per-provider full-search status, when one has run. */
-  readonly fullSearch: "idle" | "searching" | "done" | undefined;
-  /** Full-search progress counts (meaningful while fullSearch is "searching"). */
+  readonly fullSearch: "idle" | "searching" | "done" | "incomplete" | undefined;
+  /** Full-search progress counts (meaningful while fullSearch is "searching" or "incomplete"). */
   readonly fsSearched: number;
   readonly fsTotal: number;
 }
@@ -50,6 +50,8 @@ export interface SearchResultGroup<T = unknown> {
   readonly emptyText?: string;
   /** Human coverage line rendered below the section's results. */
   readonly coverageText?: string;
+  /** True when this provider's full search stopped partway (renders the retry control). */
+  readonly incomplete?: boolean;
   /** Label for the calm escalation button; absent hides the button. */
   readonly fetchMoreLabel?: string;
 }
@@ -161,7 +163,11 @@ export interface SearchProvider<T = unknown> {
 
 /** Per-provider progress state for opt-in full search. Managed by the registry. */
 export interface FullSearchState {
-  status: "idle" | "searching" | "done";
+  /**
+   * "incomplete" means the run failed partway; it is terminal and is not a
+   * completed sweep.
+   */
+  status: "idle" | "searching" | "done" | "incomplete";
   /** Items processed so far. */
   searched: number;
   /** Total items to process. */

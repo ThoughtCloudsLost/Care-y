@@ -140,6 +140,11 @@ export function createTicketSearchProvider(
     getResultHref: (id: string) => `/tickets/${id}`,
     emptyText: (query: string) => m.search_empty_tickets(withTerms({ query })),
     coverage: (c) => {
+      if (c.fullSearch === "incomplete") {
+        return m.search_deep_incomplete(
+          withTerms({ searched: c.fsSearched, total: c.fsTotal }),
+        );
+      }
       if (c.fullSearch === "searching") {
         return m.search_coverage_searching({
           searched: c.fsSearched,

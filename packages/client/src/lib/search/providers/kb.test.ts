@@ -25,6 +25,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   search_coverage_articles_deep: (p: { total: number }) =>
     `Searched all ${String(p.total)} articles and their full text.`,
   search_fetch_more_articles: () => "Search inside full articles",
+  search_deep_incomplete_articles: (p: { searched: number; total: number }) =>
+    `Deeper search stopped. Searched ${String(p.searched)} of ${String(p.total)} articles.`,
 }));
 
 vi.mock(
@@ -541,6 +543,18 @@ describe("KB fullSearch (body content)", () => {
           fsTotal: 30,
         }),
       ).toBe("Searched all 30 articles and their full text.");
+    });
+
+    it("reports how far a stopped full-text search got", () => {
+      expect(
+        provider.coverage?.({
+          searched: 400,
+          total: 400,
+          fullSearch: "incomplete",
+          fsSearched: 120,
+          fsTotal: 400,
+        }),
+      ).toBe("Deeper search stopped. Searched 120 of 400 articles.");
     });
 
     it("reports titles-and-summaries coverage before that", () => {

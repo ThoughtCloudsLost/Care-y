@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/svelte";
-import type { SearchProvider, FullSearchState } from "./types.js";
+import type {
+  CoverageState,
+  SearchProvider,
+  FullSearchState,
+} from "./types.js";
 import {
   registerSearchProvider,
   searchAll,
@@ -687,5 +691,87 @@ describe("edge cases", () => {
 
       unregister();
     });
+  });
+});
+
+describe("failed full search runs", () => {
+  it("records a rejected run as incomplete and drops the escalation button", async () => {
+    const coverage = vi.fn((_state: CoverageState): string => "coverage line");
+    const unregister = registerSearchProvider({
+      ...mockFullSearchProvider("tickets", {
+        fullSearchFn: async (
+          _q: string,
+          state: FullSearchState,
+          onProgress: () => void,
+        ) => {
+          state.total = 10;
+          state.searched = 4;
+          state.matchCount = 1;
+          onProgress();
+          throw new Error("page decrypt failed");
+        },
+      }),
+      coverage,
+      fullSearchLabel: () => "Search the rest",
+    });
+
+    runFullSearchForProvider("tickets", "harbor");
+    await new Promise((r) => setTimeout(r, 0));
+
+    const ticketState = getFullSearchStateForProvider("tickets");
+    expect(ticketState?.status).toBe("incomplete");
+    expect(ticketState?.searched).toBe(4);
+    expect(ticketState?.total).toBe(10);
+
+    const group = searchAll("harbor").find((g) => g.providerId === "tickets");
+    expect(group?.incomplete).toBe(true);
+    expect(group?.fetchMoreLabel).toBeUndefined();
+    expect(coverage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        fullSearch: "incomplete",
+        fsSearched: 4,
+        fsTotal: 10,
+      }),
+    );
+
+    unregister();
+  });
+
+  it("ignores a stale run's rejection after a newer run started", async () => {
+    const pending: Array<{
+      resolve: () => void;
+      reject: (reason: Error) => void;
+    }> = [];
+    const unregister = registerSearchProvider(
+      mockFullSearchProvider("tickets", {
+        fullSearchFn: async (
+          _q: string,
+          state: FullSearchState,
+          onProgress: () => void,
+        ) => {
+          state.total = 10;
+          state.searched = 2;
+          onProgress();
+          await new Promise<void>((resolve, reject) => {
+            pending.push({ resolve, reject });
+          });
+        },
+      }),
+    );
+
+    runFullSearchForProvider("tickets", "first");
+    // runFullSearch starts a fresh run without waiting on the first.
+    runFullSearch("second");
+    expect(pending).toHaveLength(2);
+
+    pending[0]?.reject(new Error("stale run failed"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getFullSearchStateForProvider("tickets")?.status).toBe("searching");
+
+    pending[1]?.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getFullSearchStateForProvider("tickets")?.status).toBe("done");
+
+    unregister();
   });
 });

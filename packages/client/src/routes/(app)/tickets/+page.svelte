@@ -548,6 +548,7 @@
     fetchNextPage: async () => ticketsQuery.fetchNextPage(),
     isInitialLoading: () => ticketsQuery.isLoading,
     loadedCount: () => allTickets.length,
+    totalCount: () => countsQuery.data?.total,
     matchCount: () => titleMatchIds.length,
   });
 
@@ -1215,6 +1216,12 @@
     deepSearchStatus={deepSearch.status}
     deepSearchSearched={deepSearch.searched}
     deepSearchTotal={deepSearch.total}
+    ondeepsearchretry={deepSearch.retry}
+    deepSearchIncompleteText={deepSearch.status === "incomplete"
+      ? m.search_deep_incomplete(
+          withTerms({ searched: deepSearch.searched, total: deepSearch.total }),
+        )
+      : undefined}
   />
 {/snippet}
 

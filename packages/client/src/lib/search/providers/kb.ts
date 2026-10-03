@@ -152,6 +152,12 @@ export function createKbSearchProvider(
     getResultHref: (id) => `/library/${id}`,
     emptyText: (query: string) => m.search_empty_articles({ query }),
     coverage: (c) => {
+      if (c.fullSearch === "incomplete") {
+        return m.search_deep_incomplete_articles({
+          searched: c.fsSearched,
+          total: c.fsTotal,
+        });
+      }
       if (c.fullSearch === "searching") {
         return m.search_coverage_searching({
           searched: c.fsSearched,

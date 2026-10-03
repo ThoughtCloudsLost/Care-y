@@ -23,6 +23,12 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     `Searched all ${String(p.total)} ${p.tickets} unlocked on this device.`,
   search_fetch_more_tickets: (p: { count: number; tickets: string }) =>
     `Search the other ${String(p.count)} ${p.tickets}`,
+  search_deep_incomplete: (p: {
+    searched: number;
+    total: number;
+    tickets: string;
+  }) =>
+    `Deeper search stopped. Searched ${String(p.searched)} of ${String(p.total)} ${p.tickets}.`,
 }));
 
 // vi.mock required: withTerms resolves org terminology through a Svelte
@@ -176,6 +182,18 @@ describe("createTicketSearchProvider", () => {
           fsTotal: 120,
         }),
       ).toBe("Searching 40 of 120...");
+    });
+
+    it("reports how far a stopped full search got", () => {
+      expect(
+        cov({
+          searched: 100,
+          total: 400,
+          fullSearch: "incomplete",
+          fsSearched: 120,
+          fsTotal: 400,
+        }),
+      ).toBe("Deeper search stopped. Searched 120 of 400 tickets.");
     });
 
     it("stays silent before anything is cached", () => {

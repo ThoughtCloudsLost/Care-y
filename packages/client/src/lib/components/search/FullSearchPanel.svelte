@@ -21,6 +21,7 @@
   const isDone = $derived(
     states.length > 0 && states.every((s) => s.status === "done"),
   );
+  const anyIncomplete = $derived(states.some((s) => s.status === "incomplete"));
   const totalCachedItems = $derived(
     groups.reduce((sum, g) => sum + g.totalCached, 0),
   );
@@ -33,7 +34,9 @@
 
   const anyGroupLoading = $derived(groups.some((g) => g.loading));
 
-  // Auto-trigger when no matches exist in decrypted data
+  // Auto-trigger when no matches exist in decrypted data. An incomplete run
+  // is terminal like done; re-running it automatically would retry the
+  // failing provider in a loop.
   $effect(() => {
     if (
       fullSearchAvailable &&
@@ -42,6 +45,7 @@
       !anyGroupLoading &&
       !isSearching &&
       !isDone &&
+      !anyIncomplete &&
       totalCachedItems > 0
     ) {
       runFullSearch(query);
@@ -59,6 +63,8 @@
             <span class="progress-label">{providerState.label}</span>
             {#if providerState.status === "done"}
               <span class="progress-done">{m.search_full_done()}</span>
+            {:else if providerState.status === "incomplete"}
+              <span class="progress-done">{m.search_full_stopped()}</span>
             {:else}
               <Progressbar
                 progress={providerState.searched /
