@@ -7,6 +7,8 @@
   Fetches article via trpc.kb.getItem, decrypts title and body,
   renders body through renderArticleBody() (DOMPurify-sanitized),
   and manages vote state with optimistic updates.
+  Renders QueryError when the article query fails: a deleted article
+  offers the way back to the library, any other failure offers retry.
 -->
 <script lang="ts">
   import {
@@ -15,6 +17,7 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { decode } from "@care-y/crypto";
+  import { ErrorCode } from "@care-y/shared";
   import { Link } from "konsta/svelte";
   import { ChevronLeft, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -49,6 +52,7 @@
   import KbAttachmentChip from "$lib/components/library/KbAttachmentChip.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import QueryError from "$lib/components/QueryError.svelte";
 
   let {
     articleId,
@@ -114,6 +118,11 @@
   }));
 
   const article = $derived(articleQuery.data);
+
+  const articleNotFound = $derived(
+    articleQuery.error instanceof Error &&
+      articleQuery.error.message === ErrorCode.KB_ARTICLE_NOT_FOUND,
+  );
 
   const categoryId = $derived(
     article?.categoryId ?? cachedSummary?.categoryId ?? null,
@@ -458,67 +467,90 @@
   {/if}
 {/snippet}
 
-<div class="article-detail">
-  <h1 class="article-title">
-    <DecryptPlaceholder result={titleResult} length={30}>
-      {#if titleResult.status === "ready"}
-        {titleResult.value}
-      {/if}
-    </DecryptPlaceholder>
-  </h1>
-
-  <div class="article-meta" role="group" aria-label={m.library_article_info()}>
-    {#if authorName !== null}
-      <span>{m.library_article_by({ author: authorName })}</span>
-    {:else if createdBy === null}
-      <InlineSkeleton width="8ch" />
-    {/if}
-    {#if relativeTime !== null}
-      <span aria-label={updatedAt?.toLocaleDateString()}>
-        {m.library_article_updated({ time: relativeTime })}
-      </span>
-    {:else if rawUpdatedAt === null}
-      <InlineSkeleton width="10ch" />
-    {/if}
-  </div>
-
-  {#if renderedBody !== null}
-    <article
-      class="article-body prose-quotes"
-      use:resolveKbImages={imageResolverDeps}
-    >
-      <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by DOMPurify in renderArticleBody() -->
-      {@html renderedBody}
-    </article>
-  {:else if bodyIsLoading}
-    <DecryptPlaceholder block length={200} />
-  {:else if bodyDecryptFailed}
-    <DecryptPlaceholder result={{ status: "error" }} block length={100} />
-  {/if}
-
-  {#if nonImageAttachments.length > 0}
-    <section class="attachments" aria-label={m.library_attachments()}>
-      {#each nonImageAttachments as att (att.id)}
-        <KbAttachmentChip
-          attachmentId={att.id}
-          filename={att.filename}
-          sizeBytes={att.sizeBytes}
-        />
-      {/each}
-    </section>
-  {/if}
-
-  {#if cachedSummary != null || article != null}
-    <ArticleVote
-      {voteUpCount}
-      {voteDownCount}
-      userDirection={userVoteDirection}
-      onvote={handleVote}
-      onremove={handleRemoveVote}
-      disabled={castVoteMutation.isPending || removeVoteMutation.isPending}
+{#if articleQuery.isError}
+  {#if articleNotFound}
+    <QueryError
+      error={articleQuery.error}
+      message={m.error_kb_article_not_found()}
+      action={{
+        label: m.library_back_to_library(withTerms()),
+        onclick: onback,
+      }}
+    />
+  {:else}
+    <QueryError
+      error={articleQuery.error}
+      message={m.library_article_load_failed()}
+      onretry={() => void articleQuery.refetch()}
     />
   {/if}
-</div>
+{:else}
+  <div class="article-detail">
+    <h1 class="article-title">
+      <DecryptPlaceholder result={titleResult} length={30}>
+        {#if titleResult.status === "ready"}
+          {titleResult.value}
+        {/if}
+      </DecryptPlaceholder>
+    </h1>
+
+    <div
+      class="article-meta"
+      role="group"
+      aria-label={m.library_article_info()}
+    >
+      {#if authorName !== null}
+        <span>{m.library_article_by({ author: authorName })}</span>
+      {:else if createdBy === null}
+        <InlineSkeleton width="8ch" />
+      {/if}
+      {#if relativeTime !== null}
+        <span aria-label={updatedAt?.toLocaleDateString()}>
+          {m.library_article_updated({ time: relativeTime })}
+        </span>
+      {:else if rawUpdatedAt === null}
+        <InlineSkeleton width="10ch" />
+      {/if}
+    </div>
+
+    {#if renderedBody !== null}
+      <article
+        class="article-body prose-quotes"
+        use:resolveKbImages={imageResolverDeps}
+      >
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by DOMPurify in renderArticleBody() -->
+        {@html renderedBody}
+      </article>
+    {:else if bodyIsLoading}
+      <DecryptPlaceholder block length={200} />
+    {:else if bodyDecryptFailed}
+      <DecryptPlaceholder result={{ status: "error" }} block length={100} />
+    {/if}
+
+    {#if nonImageAttachments.length > 0}
+      <section class="attachments" aria-label={m.library_attachments()}>
+        {#each nonImageAttachments as att (att.id)}
+          <KbAttachmentChip
+            attachmentId={att.id}
+            filename={att.filename}
+            sizeBytes={att.sizeBytes}
+          />
+        {/each}
+      </section>
+    {/if}
+
+    {#if cachedSummary != null || article != null}
+      <ArticleVote
+        {voteUpCount}
+        {voteDownCount}
+        userDirection={userVoteDirection}
+        onvote={handleVote}
+        onremove={handleRemoveVote}
+        disabled={castVoteMutation.isPending || removeVoteMutation.isPending}
+      />
+    {/if}
+  </div>
+{/if}
 
 <style>
   .article-detail {
