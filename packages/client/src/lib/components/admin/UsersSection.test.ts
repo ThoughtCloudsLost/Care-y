@@ -1035,6 +1035,11 @@ describe("UsersSection", () => {
       await waitFor(() => {
         expect(mockSetUserActive).toHaveBeenCalledTimes(1);
       });
+      const cards = screen.getAllByTestId("stub-user-card");
+      expect(cards).toHaveLength(3);
+      for (const card of cards) {
+        expect(card.getAttribute("data-locked")).toBe("true");
+      }
 
       await fireEvent.click(
         screen.getByRole("button", { name: "Exit select" }),

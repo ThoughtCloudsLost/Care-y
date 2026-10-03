@@ -719,6 +719,7 @@
             reachability={user.reachability}
             selected={selectedIds.has(user.id)}
             {multiSelectActive}
+            locked={batchPending}
             onedit={(id: string) => void handleUserEdit(id)}
             onselect={toggleSelection}
           />
