@@ -943,8 +943,11 @@ export async function createTicket(
     .locator("li")
     .filter({ hasText: /queue/i })
     .locator("select");
+  // RichSelect wraps each option label in a span. Playwright's :text()
+  // matches the smallest element containing the text, which is that span,
+  // so an option:text() locator never resolves; hasText looks inside.
   await queueSelect
-    .locator(`option:text("${opts.queue}")`)
+    .locator("option", { hasText: opts.queue })
     .waitFor({ state: "attached", timeout: 10_000 });
   await queueSelect.selectOption({ label: opts.queue });
 
