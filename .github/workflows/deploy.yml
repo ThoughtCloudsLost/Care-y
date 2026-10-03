@@ -82,6 +82,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
+          fetch-depth: 0 # the migrations step diffs against the previous release tag
           persist-credentials: false
 
       # Image references must be lowercase; the owner name may not be.
@@ -203,6 +204,28 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
             --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
 
+      # A release that carries a migration cannot be rolled back (the schema
+      # stays at the newer version). The generated notes do not say so, so
+      # the migrations added since the previous release are appended here.
+      - name: Name the migrations in the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --quiet --tags origin
+          previous="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vx "$GITHUB_REF_NAME" | head -n 1)"
+          if [ -z "$previous" ]; then echo "no previous release tag, nothing to name"; exit 0; fi
+          added="$(git diff --name-only --diff-filter=A "$previous" "$GITHUB_SHA" -- \
+            packages/server/src/db/migrations/platform packages/server/src/db/migrations/tenant \
+            | sed -E 's#packages/server/src/db/migrations/##' | sort)"
+          if [ -z "$added" ]; then
+            section=$'\n\n## Migrations\n\nNone since '"$previous"'. Rollback to it is possible.'
+          else
+            section=$'\n\n## Migrations\n\nAdded since '"$previous"$' (no rollback across this release):\n'"$(printf -- '- `%s`\n' $added)"
+          fi
+          body="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json body --jq .body)"
+          printf '%s%s\n' "$body" "$section" > notes.md
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+
   deploy:
     name: Deploy to production
     needs: build
@@ -215,9 +238,47 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+
+      # Provisioning installs deploy.sh and deploy-root.sh on the host once;
+      # no release refreshes them. The forced command's "version" verb prints
+      # the installed copies' SHA-256, compared here with the repository's
+      # copies at this release, so a changed script fails the release with
+      # the reinstall step named instead of drifting silently. A host whose
+      # deploy.sh predates the verb answers "refused", which fails the same
+      # way.
+      - name: Host deploy scripts match the repository
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/deploy_key"
+          known_hosts="$RUNNER_TEMP/known_hosts"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" >"$key"
+          printf '%s\n' "$DEPLOY_HOST_KEY" >"$known_hosts"
+          installed="$(ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            "deploy@$DEPLOY_HOST" version 2>/dev/null || true)"
+          want_deploy="$(sha256sum deploy/deploy.sh | cut -d' ' -f1)"
+          want_root="$(sha256sum deploy/deploy-root.sh | cut -d' ' -f1)"
+          have_deploy="$(printf '%s\n' "$installed" | awk '$2=="/usr/local/bin/care-y-deploy"{print $1}')"
+          have_root="$(printf '%s\n' "$installed" | awk '$2=="/usr/local/bin/care-y-deploy-root"{print $1}')"
+          if [ "$have_deploy" != "$want_deploy" ] || [ "$have_root" != "$want_root" ]; then
+            echo "::error::The host's deploy scripts differ from deploy/deploy.sh and deploy/deploy-root.sh at this release (or the host's deploy.sh predates the version verb). Reinstall both per docs/operations/runbooks/deploy.md, \"Deploy scripts changed\", then rerun this job."
+            exit 1
+          fi
+          echo "host deploy scripts match"
+
       # The key's only authorized use on the host is the forced command,
-      # which accepts "deploy <40-hex sha>" and nothing else. The host key is
-      # pinned: no trust on first use.
+      # which accepts "deploy <40-hex sha>" or "version" and nothing else.
+      # The host key is pinned: no trust on first use.
       #
       # The remote output is discarded here, on the runner: the migration
       # runner names every tenant schema, and this log is public. The host
@@ -241,6 +302,32 @@ jobs:
             echo "::error::Deploy of $GITHUB_SHA failed. Details are in the host's deploy log."
             exit 1
           fi
+
+      # The host probes itself over loopback. This probes from outside, over
+      # the public names and real DNS and TLS, which is what a user gets.
+      # The names are repository variables; with none set the step says so
+      # and passes, so a fresh fork is not blocked by it.
+      - name: Smoke check from outside
+        env:
+          APEX_HOST: ${{ vars.CAREY_APEX_HOST }}
+          APP_HOST: ${{ vars.CAREY_APP_HOST }}
+        run: |
+          if [ -z "$APEX_HOST" ] && [ -z "$APP_HOST" ]; then
+            echo "::notice::CAREY_APEX_HOST and CAREY_APP_HOST are unset; no external smoke check"
+            exit 0
+          fi
+          for host in $APEX_HOST $APP_HOST; do
+            for attempt in 1 2 3 4 5 6; do
+              code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://$host/" || echo 000)"
+              [ "$code" = "200" ] && break
+              sleep 10
+            done
+            if [ "$code" != "200" ]; then
+              echo "::error::https://$host/ answered $code after the deploy"
+              exit 1
+            fi
+            echo "https://$host/ 200"
+          done
 
   # The handbook follows production: same commit, only after the deploy
   # succeeded. The called workflow brings its own pages permissions.
