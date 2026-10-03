@@ -30,6 +30,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
   import {
     ticketPrioritySchema,
     newTicketId,
@@ -41,7 +42,7 @@
     ClientSearchResult,
     PhoneLookupResult,
   } from "$lib/components/inputs/ClientSelect.svelte";
-  import { ClientError } from "$lib/errors.js";
+  import { ClientError, LookupFailedError } from "$lib/errors.js";
   import { PRIORITY_OPTIONS } from "$lib/tickets/priority-labels.js";
   import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
@@ -56,14 +57,16 @@
      * Resolves what ticket the create will land on for an existing client
      * (open ticket blocks, closed ticket reopens under its old id). The
      * AAD binds the ticket id at encrypt time, so the form must know the
-     * target id before encrypting (ADR-053).
+     * target id before encrypting (ADR-053). A rejection should be a
+     * LookupFailedError whose message the form shows.
      */
     resolveCreateTarget: (clientId: string) => Promise<{
       openTicketId: string | null;
       reopenTicketId: string | null;
     }>;
     /** Fetches active, onboarded queue members with their vol_public keys
-     *  so the worker can wrap tk for the full recipient set. */
+     *  so the worker can wrap tk for the full recipient set. A rejection
+     *  should be a LookupFailedError whose message the form shows. */
     fetchQueueMemberKeys: (
       queueId: string,
     ) => Promise<readonly { volunteerId: string; volPublic: string }[]>;
@@ -177,8 +180,23 @@
           ? { clientId: selection.clientId }
           : { clientToken: selection.token }),
       });
-    } catch {
-      errors = { form: m.ticket_new_error_encrypt_failed(withTerms()) };
+    } catch (err: unknown) {
+      // The parent turns a failed lookup into a LookupFailedError whose
+      // message is ready to show; the form stays filled in for a retry.
+      // A worker or client error from the encryption path is an encryption
+      // failure, and anything unexpected shows the generic message and is
+      // rethrown so it still surfaces.
+      if (err instanceof LookupFailedError) {
+        errors = { form: err.message };
+      } else if (
+        err instanceof CryptoWorkerError ||
+        err instanceof ClientError
+      ) {
+        errors = { form: m.ticket_new_error_encrypt_failed(withTerms()) };
+      } else {
+        errors = { form: m.error_generic() };
+        throw err;
+      }
     } finally {
       encrypting = false;
     }

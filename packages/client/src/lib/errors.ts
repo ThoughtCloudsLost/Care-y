@@ -15,6 +15,17 @@ export class ClientError extends Error {
   }
 }
 
+/**
+ * A lookup the new-ticket flow depends on failed before anything was
+ * encrypted. The message is already the localized text to show the user.
+ */
+export class LookupFailedError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "LookupFailedError";
+  }
+}
+
 /** WebAuthn API validation failures (bad input, missing public key, unsupported browser). */
 export class WebauthnError extends ClientError {
   constructor(message: string) {

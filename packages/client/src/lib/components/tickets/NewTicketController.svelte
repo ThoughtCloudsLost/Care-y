@@ -2,6 +2,7 @@
   New ticket sheet controller.
   Owns data fetching (queues), mutation (createTicket), and collision navigation.
   Same pattern as InternalNoteSheet / DisplayNameSheet.
+  Also classifies lookup failures so the form can show the right message.
 -->
 <script lang="ts">
   import {
@@ -9,6 +10,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { isTRPCClientError } from "@trpc/client";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import NewTicketForm from "./NewTicketForm.svelte";
@@ -20,7 +22,11 @@
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { LookupFailedError, requireRouter } from "$lib/errors.js";
+  import {
+    getErrorMessage,
+    isErrorCode,
+  } from "$lib/components/query-error-messages.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
 
@@ -91,6 +97,42 @@
     oncollision(ticketId);
   }
 
+  /**
+   * True when the request never got a reply from the server: tRPC raised
+   * the error itself with no server error data attached, or the underlying
+   * cause is the TypeError fetch throws when the network is unreachable.
+   */
+  function isTransportFailure(err: unknown): boolean {
+    if (isTRPCClientError(err)) {
+      const data: unknown = err.data;
+      if (data === undefined || data === null) return true;
+    }
+    return err instanceof Error && err.cause instanceof TypeError;
+  }
+
+  /**
+   * Runs one of the form's lookups and turns a rejection into a
+   * LookupFailedError carrying the message to show: the mapped text when
+   * the server sent a known error code, the connection message when the
+   * request never reached the server, and the generic message when the
+   * server answered with something unmapped.
+   */
+  async function lookup<T>(call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (err: unknown) {
+      let message: string;
+      if (err instanceof Error && isErrorCode(err.message)) {
+        message = getErrorMessage(err);
+      } else if (isTransportFailure(err)) {
+        message = m.error_network();
+      } else {
+        message = m.error_generic();
+      }
+      throw new LookupFailedError(message);
+    }
+  }
+
   const clientSearch = createClientSelectSearch({
     ticketRouter,
     orgCache,
@@ -117,9 +159,11 @@
   {/snippet}
   <NewTicketForm
     resolveCreateTarget={async (clientId: string) =>
-      ticketRouter.resolveCreateTarget.query({ clientId })}
+      lookup(async () => ticketRouter.resolveCreateTarget.query({ clientId }))}
     fetchQueueMemberKeys={async (qId: string) =>
-      ticketRouter.listQueueMemberPublicKeys.query({ queueId: qId })}
+      lookup(async () =>
+        ticketRouter.listQueueMemberPublicKeys.query({ queueId: qId }),
+      )}
     queues={decryptedQueues}
     searchClients={clientSearch.search}
     phoneLookup={clientSearch.phoneLookup}

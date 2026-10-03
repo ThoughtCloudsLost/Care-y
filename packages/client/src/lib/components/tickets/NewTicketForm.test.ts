@@ -1,23 +1,48 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import type { Mock } from "vitest";
+import {
+  render,
+  cleanup,
+  fireEvent,
+  type RenderResult,
+} from "@testing-library/svelte";
 import NewTicketForm from "./NewTicketForm.svelte";
 import { resolveQueueAppearance } from "$lib/utils/queue-appearance.js";
+import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
+import { ClientError, LookupFailedError } from "$lib/errors.js";
 import type * as ErrorsNS from "$lib/errors.js";
 import type * as ContextNS from "$lib/shell/context.js";
 import type * as OrgSlugNS from "$lib/utils/org-slug.js";
 import type * as TrpcNS from "$lib/trpc/index.js";
 import type * as MessagesNS from "$lib/paraglide/messages.js";
 import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as ClientSelectModule from "$lib/components/inputs/ClientSelect.svelte";
 
 // --- Mocks ---
+
+const { mockCreateTicketEncryption } = vi.hoisted(() => ({
+  mockCreateTicketEncryption: vi.fn(),
+}));
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS2>()),
   getCryptoBridge: () => ({
-    createTicketEncryption: vi.fn(),
+    createTicketEncryption: mockCreateTicketEncryption,
   }),
 }));
+
+// vi.mock required: ClientSelect uses Bits UI Combobox which requires
+// browser APIs for positioning that jsdom cannot provide.
+vi.mock(
+  "$lib/components/inputs/ClientSelect.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/ClientSelectStub.svelte")
+      ).default as unknown as (typeof ClientSelectModule)["default"],
+    }) satisfies typeof ClientSelectModule,
+);
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesNS>()),
@@ -51,6 +76,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   empty_no_results: () => "No results found",
   shell_close: () => "Close",
   error_generic: () => "Something went wrong",
+  error_network: () => "Could not reach the server",
 }));
 
 vi.mock(
@@ -186,6 +212,177 @@ describe("NewTicketForm", () => {
       expect(form).toBeTruthy();
       expect(form!.id).toBe("test-form");
       expect(form!.classList.contains("new-ticket-body")).toBe(true);
+    });
+  });
+
+  describe("submit failures", () => {
+    // Load the mocked picker once up front. The form imports it lazily,
+    // and on a cold cache the first load can outlast the findBy timeout.
+    beforeAll(async () => {
+      await import("$lib/components/inputs/ClientSelect.svelte");
+    });
+
+    interface CreateTarget {
+      openTicketId: string | null;
+      reopenTicketId: string | null;
+    }
+    type MemberKeys = readonly { volunteerId: string; volPublic: string }[];
+
+    async function renderAndSubmit(
+      resolveCreateTarget: Mock<(clientId: string) => Promise<CreateTarget>>,
+      fetchQueueMemberKeys: Mock<(queueId: string) => Promise<MemberKeys>>,
+    ): Promise<{
+      view: RenderResult<typeof NewTicketForm>;
+      titleInput: HTMLInputElement;
+      onsubmit: Mock;
+    }> {
+      const onsubmit = vi.fn();
+      const view = render(NewTicketForm, {
+        props: {
+          queues: defaultQueues,
+          resolveCreateTarget,
+          searchClients: mockSearchClients,
+          fetchQueueMemberKeys,
+          onsubmit,
+          formId: "test-form",
+        },
+      });
+
+      // The stub selects client-1 on mount once the dynamic import lands.
+      await view.findByTestId("client-select-stub");
+
+      const titleInput =
+        view.container.querySelector<HTMLInputElement>('input[type="text"]');
+      expect(titleInput).toBeTruthy();
+      await fireEvent.input(titleInput!, { target: { value: "Rent help" } });
+
+      const queueSelect = Array.from(
+        view.container.querySelectorAll("select"),
+      ).find((el) => el.querySelector('option[value="q1"]') !== null);
+      expect(queueSelect).toBeTruthy();
+      await fireEvent.change(queueSelect!, { target: { value: "q1" } });
+
+      const form = view.container.querySelector("form");
+      expect(form).toBeTruthy();
+      await fireEvent.submit(form!);
+
+      return { view, titleInput: titleInput!, onsubmit };
+    }
+
+    it("shows the lookup's own message when the create-target lookup fails", async () => {
+      const resolveCreateTarget = vi
+        .fn<(clientId: string) => Promise<CreateTarget>>()
+        .mockRejectedValue(
+          new LookupFailedError("You do not have permission to do this."),
+        );
+      const fetchQueueMemberKeys = vi
+        .fn<(queueId: string) => Promise<MemberKeys>>()
+        .mockResolvedValue([]);
+
+      const { view, titleInput, onsubmit } = await renderAndSubmit(
+        resolveCreateTarget,
+        fetchQueueMemberKeys,
+      );
+
+      expect(
+        await view.findByText("You do not have permission to do this."),
+      ).toBeTruthy();
+      expect(view.queryByText("Could not encrypt ticket data")).toBeNull();
+      expect(mockCreateTicketEncryption).not.toHaveBeenCalled();
+      expect(onsubmit).not.toHaveBeenCalled();
+      expect(titleInput.value).toBe("Rent help");
+    });
+
+    it("shows the lookup's own message when the recipient key lookup fails", async () => {
+      const resolveCreateTarget = vi
+        .fn<(clientId: string) => Promise<CreateTarget>>()
+        .mockResolvedValue({ openTicketId: null, reopenTicketId: null });
+      const fetchQueueMemberKeys = vi
+        .fn<(queueId: string) => Promise<MemberKeys>>()
+        .mockRejectedValue(new LookupFailedError("Could not reach the server"));
+
+      const { view, titleInput, onsubmit } = await renderAndSubmit(
+        resolveCreateTarget,
+        fetchQueueMemberKeys,
+      );
+
+      expect(await view.findByText("Could not reach the server")).toBeTruthy();
+      expect(view.queryByText("Could not encrypt ticket data")).toBeNull();
+      expect(fetchQueueMemberKeys).toHaveBeenCalledWith("q1");
+      expect(mockCreateTicketEncryption).not.toHaveBeenCalled();
+      expect(onsubmit).not.toHaveBeenCalled();
+      expect(titleInput.value).toBe("Rent help");
+    });
+
+    it("reports a worker failure as an encryption problem", async () => {
+      const resolveCreateTarget = vi
+        .fn<(clientId: string) => Promise<CreateTarget>>()
+        .mockResolvedValue({ openTicketId: null, reopenTicketId: null });
+      const fetchQueueMemberKeys = vi
+        .fn<(queueId: string) => Promise<MemberKeys>>()
+        .mockResolvedValue([]);
+      mockCreateTicketEncryption.mockRejectedValueOnce(
+        new CryptoWorkerError("Encryption failed", "ENCRYPT_FAILED"),
+      );
+
+      const { view, titleInput, onsubmit } = await renderAndSubmit(
+        resolveCreateTarget,
+        fetchQueueMemberKeys,
+      );
+
+      expect(
+        await view.findByText("Could not encrypt ticket data"),
+      ).toBeTruthy();
+      expect(view.queryByText("Could not reach the server")).toBeNull();
+      expect(onsubmit).not.toHaveBeenCalled();
+      expect(titleInput.value).toBe("Rent help");
+    });
+
+    it("reports a missing encrypted field as an encryption problem", async () => {
+      const resolveCreateTarget = vi
+        .fn<(clientId: string) => Promise<CreateTarget>>()
+        .mockResolvedValue({ openTicketId: null, reopenTicketId: null });
+      const fetchQueueMemberKeys = vi
+        .fn<(queueId: string) => Promise<MemberKeys>>()
+        .mockResolvedValue([]);
+      mockCreateTicketEncryption.mockResolvedValueOnce({
+        encryptedFields: [{ name: "description", ciphertext: "c2" }],
+        keyGeneration: "1",
+        keyWraps: [],
+      });
+
+      const { view, titleInput, onsubmit } = await renderAndSubmit(
+        resolveCreateTarget,
+        fetchQueueMemberKeys,
+      );
+
+      expect(
+        await view.findByText("Could not encrypt ticket data"),
+      ).toBeTruthy();
+      expect(onsubmit).not.toHaveBeenCalled();
+      expect(titleInput.value).toBe("Rent help");
+    });
+
+    it("reports a worker that is not ready as an encryption problem", async () => {
+      const resolveCreateTarget = vi
+        .fn<(clientId: string) => Promise<CreateTarget>>()
+        .mockResolvedValue({ openTicketId: null, reopenTicketId: null });
+      const fetchQueueMemberKeys = vi
+        .fn<(queueId: string) => Promise<MemberKeys>>()
+        .mockResolvedValue([]);
+      mockCreateTicketEncryption.mockRejectedValueOnce(
+        new ClientError("Crypto worker is not ready."),
+      );
+
+      const { view, onsubmit } = await renderAndSubmit(
+        resolveCreateTarget,
+        fetchQueueMemberKeys,
+      );
+
+      expect(
+        await view.findByText("Could not encrypt ticket data"),
+      ).toBeTruthy();
+      expect(onsubmit).not.toHaveBeenCalled();
     });
   });
 });
