@@ -813,6 +813,7 @@
   "panel_settings": "Configuración",
   "panel_logout": "Cerrar sesión",
   "hub_users_subtitle": "Administrar usuarios, roles e invitaciones",
+  "hub_roles_subtitle": "Permisos de cada rol",
   "hub_queues_subtitle": "Crear y asignar {queues} de {tickets}",
   "hub_telephony_subtitle": "Números de teléfono y enrutamiento de llamadas",
   "hub_blocklist_subtitle": "Números bloqueados",

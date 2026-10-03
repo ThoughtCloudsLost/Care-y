@@ -813,6 +813,7 @@
   "panel_settings": "⟦Sèttìngs •••⟧",
   "panel_logout": "⟦Lòg òùt •••⟧",
   "hub_users_subtitle": "⟦Mànàgè ùsèrs, ròlès, ànd ìnvìtàtìòns •••••••••••⟧",
+  "hub_roles_subtitle": "⟦Pèrmìssìòns fòr èàch ròlè ••••••••⟧",
   "hub_queues_subtitle": "⟦Crèàtè ànd àssìgn  ••••••{ticket}  •{queues}⟧",
   "hub_telephony_subtitle": "⟦Phònè nùmbèrs ànd càll ròùtìng •••••••••⟧",
   "hub_blocklist_subtitle": "⟦Blòckèd nùmbèrs •••••⟧",
