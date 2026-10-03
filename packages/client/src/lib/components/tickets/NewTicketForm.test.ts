@@ -32,12 +32,16 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   }),
 }));
 
+// vi.mock required: ClientSelect uses Bits UI Combobox which requires
+// browser APIs for positioning that jsdom cannot provide.
 vi.mock(
   "$lib/components/inputs/ClientSelect.svelte",
-  async (importOriginal) => ({
-    ...(await importOriginal<typeof ClientSelectModule>()),
-    default: (await import("./test-helpers/ClientSelectStub.svelte")).default,
-  }),
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/ClientSelectStub.svelte")
+      ).default as unknown as (typeof ClientSelectModule)["default"],
+    }) satisfies typeof ClientSelectModule,
 );
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
