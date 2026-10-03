@@ -2,13 +2,19 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
 import { Ticket } from "@lucide/svelte";
+import * as m from "$lib/paraglide/messages.js";
 import FullSearchPanel from "./FullSearchPanel.svelte";
 import FakeResultItem from "./test-helpers/FakeResultItem.svelte";
 import {
+  getFullSearchStateForProvider,
   registerSearchProvider,
   resetFullSearch,
 } from "$lib/search/registry.svelte.js";
-import type { SearchProvider, SearchResultGroup } from "$lib/search/types.js";
+import type {
+  FullSearchState,
+  SearchProvider,
+  SearchResultGroup,
+} from "$lib/search/types.js";
 
 const cleanups: (() => void)[] = [];
 
@@ -38,14 +44,15 @@ interface FakeResultData {
 
 function providerWithFullSearch(
   fullSearch: NonNullable<SearchProvider["fullSearch"]>,
+  id = "aa",
 ): SearchProvider<FakeResultData> {
   return {
-    id: "aa",
-    label: () => "AA",
+    id,
+    label: () => id.toUpperCase(),
     icon: Ticket,
     renderMode: "list",
-    showAllHref: () => "/aa",
-    getResultHref: (id: string) => `/aa/${id}`,
+    showAllHref: () => `/${id}`,
+    getResultHref: (resultId: string) => `/${id}/${resultId}`,
     search: () => ({ results: [], loading: false, totalCached: 0 }),
     ResultItem: FakeResultItem,
     fullSearch,
@@ -107,5 +114,194 @@ describe("FullSearchPanel", () => {
     });
     await Promise.resolve();
     expect(fullSearch).not.toHaveBeenCalled();
+  });
+
+  it("does not auto-run again after a provider's run stops incomplete", async () => {
+    const fullSearch = vi.fn(
+      async (
+        _query: string,
+        state: FullSearchState,
+        onProgress: () => void,
+      ): Promise<void> => {
+        state.total = 5;
+        state.searched = 2;
+        onProgress();
+        throw new Error("page decrypt failed");
+      },
+    );
+    cleanups.push(registerSearchProvider(providerWithFullSearch(fullSearch)));
+    render(FullSearchPanel, {
+      props: {
+        query: "housing",
+        groups: [makeGroup(5)],
+        hasAnyResults: false,
+      },
+    });
+    await waitFor(() => {
+      expect(getFullSearchStateForProvider("aa")?.status).toBe("incomplete");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fullSearch).toHaveBeenCalledOnce();
+  });
+
+  it("marks a stopped provider's row while another provider is still searching", async () => {
+    let releaseSlow: () => void = () => undefined;
+    cleanups.push(
+      registerSearchProvider(
+        providerWithFullSearch(
+          async (
+            _query: string,
+            state: FullSearchState,
+            onProgress: () => void,
+          ): Promise<void> => {
+            state.total = 5;
+            state.searched = 2;
+            onProgress();
+            throw new Error("page decrypt failed");
+          },
+        ),
+      ),
+    );
+    cleanups.push(
+      registerSearchProvider(
+        providerWithFullSearch(
+          async (
+            _query: string,
+            state: FullSearchState,
+            onProgress: () => void,
+          ): Promise<void> => {
+            state.total = 8;
+            state.searched = 3;
+            onProgress();
+            await new Promise<void>((resolve) => {
+              releaseSlow = resolve;
+            });
+          },
+          "bb",
+        ),
+      ),
+    );
+    const { getByRole, getByText } = render(FullSearchPanel, {
+      props: {
+        query: "housing",
+        groups: [makeGroup(0)],
+        hasAnyResults: true,
+      },
+    });
+    await fireEvent.click(
+      getByRole("button", { name: "Search everything not yet unlocked" }),
+    );
+
+    await waitFor(() => {
+      expect(getByText(m.search_full_stopped())).toBeDefined();
+    });
+    expect(getByText("AA")).toBeDefined();
+    expect(getFullSearchStateForProvider("bb")?.status).toBe("searching");
+
+    releaseSlow();
+  });
+
+  it("keeps the stopped row and offers the trigger once every provider has settled with one incomplete", async () => {
+    cleanups.push(
+      registerSearchProvider(
+        providerWithFullSearch(
+          async (
+            _query: string,
+            state: FullSearchState,
+            onProgress: () => void,
+          ): Promise<void> => {
+            state.total = 5;
+            state.searched = 2;
+            onProgress();
+            throw new Error("page decrypt failed");
+          },
+        ),
+      ),
+    );
+    const { getByRole, getByText, queryByText } = render(FullSearchPanel, {
+      props: {
+        query: "housing",
+        groups: [makeGroup(0)],
+        hasAnyResults: true,
+      },
+    });
+    await fireEvent.click(
+      getByRole("button", { name: "Search everything not yet unlocked" }),
+    );
+
+    await waitFor(() => {
+      expect(getFullSearchStateForProvider("aa")?.status).toBe("incomplete");
+    });
+    expect(getByText(m.search_full_stopped())).toBeDefined();
+    expect(getByText("AA")).toBeDefined();
+    expect(
+      getByRole("button", { name: "Search everything not yet unlocked" }),
+    ).toBeDefined();
+    expect(queryByText(m.search_full_progress_title())).toBeNull();
+  });
+
+  it("shows no filled bar for a provider still listing with no total", async () => {
+    let releaseA: () => void = () => undefined;
+    let releaseB: () => void = () => undefined;
+    cleanups.push(
+      registerSearchProvider(
+        providerWithFullSearch(
+          async (
+            _query: string,
+            state: FullSearchState,
+            onProgress: () => void,
+          ): Promise<void> => {
+            state.searched = 3;
+            state.total = 0;
+            onProgress();
+            await new Promise<void>((resolve) => {
+              releaseA = resolve;
+            });
+          },
+        ),
+      ),
+    );
+    cleanups.push(
+      registerSearchProvider(
+        providerWithFullSearch(
+          async (
+            _query: string,
+            state: FullSearchState,
+            onProgress: () => void,
+          ): Promise<void> => {
+            state.total = 8;
+            state.searched = 3;
+            onProgress();
+            await new Promise<void>((resolve) => {
+              releaseB = resolve;
+            });
+          },
+          "bb",
+        ),
+      ),
+    );
+    const { container, getByRole, getByText, queryByText } = render(
+      FullSearchPanel,
+      {
+        props: {
+          query: "housing",
+          groups: [makeGroup(0)],
+          hasAnyResults: true,
+        },
+      },
+    );
+    await fireEvent.click(
+      getByRole("button", { name: "Search everything not yet unlocked" }),
+    );
+
+    await waitFor(() => {
+      expect(getByText("3/8")).toBeDefined();
+    });
+    expect(getByText("3")).toBeDefined();
+    expect(queryByText("3/0")).toBeNull();
+    expect(container.querySelectorAll('[style*="translateX"]')).toHaveLength(1);
+
+    releaseA();
+    releaseB();
   });
 });

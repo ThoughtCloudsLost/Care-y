@@ -7,6 +7,9 @@ import {
 } from "./registry.svelte.js";
 import type { SearchOverlay } from "./search-overlay.svelte.js";
 
+/** Deep search status as SearchNavigator renders it. */
+export type DeepSearchStatus = "idle" | "searching" | "done" | "incomplete";
+
 export interface DeepSearchOptions {
   /** The page's search overlay composable. */
   overlay: SearchOverlay;
@@ -16,19 +19,28 @@ export interface DeepSearchOptions {
   hasNextPage: () => boolean;
   /** Reactive getter: is the infinite query currently fetching the next page? */
   isFetchingNextPage: () => boolean;
-  /** Fetch the next page of the infinite query. */
-  fetchNextPage: () => Promise<unknown>;
+  /**
+   * Fetch the next page. TanStack resolves (does not reject) on a failed
+   * page unless called with throwOnError, so the resolved result's
+   * isFetchNextPageError is how a failure is seen.
+   */
+  fetchNextPage: () => Promise<{ readonly isFetchNextPageError: boolean }>;
   /** Reactive getter: is the initial query still loading? */
   isInitialLoading: () => boolean;
   /** Reactive getter: current number of loaded items (for progress display). */
   loadedCount: () => number;
+  /**
+   * Reactive getter: size of the full dataset when the server reports it,
+   * used for the stopped-run coverage line.
+   */
+  totalCount: () => number | undefined;
   /** Reactive getter: number of search matches from decrypted data (for auto-trigger). */
   matchCount: () => number;
 }
 
 export interface DeepSearch {
   /** Mapped status for SearchNavigator props. */
-  readonly status: "idle" | "searching" | "done";
+  readonly status: DeepSearchStatus;
   /** Progress: items processed so far. */
   readonly searched: number;
   /** Progress: total items to process. */
@@ -41,6 +53,11 @@ export interface DeepSearch {
   trigger: () => void;
   /** Schedule deep search after initial data load (call from URL param handler). */
   scheduleFromNavigation: () => void;
+  /**
+   * Retry a stopped (incomplete) run: resets the provider's full search and
+   * triggers again.
+   */
+  retry: () => void;
 }
 
 /** Poll interval while waiting out a page fetch the list view already started. */
@@ -52,17 +69,22 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   );
   let searchTerm = $state<string | null>(null);
   let pendingFromUrl = $state(false);
+  // Snapshot of the last live counts when a run stops, so the incomplete
+  // line reports how far it got.
+  let stoppedSearched = $state(0);
+  let stoppedTotal = $state(0);
 
   const fsState = $derived(getFullSearchStateForProvider(options.providerId));
   const contentMatchIds = $derived(getContentMatchIds(options.providerId));
   const hasCapability = $derived(providerHasFullSearch(options.providerId));
 
-  const status = $derived.by((): "idle" | "searching" | "done" => {
+  const status = $derived.by((): DeepSearchStatus => {
     if (phase === "fetching" || phase === "content") return "searching";
-    // "error" reports as done because it is terminal, not because it
-    // succeeded. Reporting idle instead would re-arm the zero-match
-    // auto-trigger below and retry the failing fetch in a loop.
-    if (phase === "done" || phase === "error") return "done";
+    if (phase === "done") return "done";
+    // "error" is terminal and reports as incomplete. Reporting idle instead
+    // would re-arm the zero-match auto-trigger below and retry the failing
+    // run in a loop; reporting done would claim a sweep that never finished.
+    if (phase === "error") return "incomplete";
     return "idle";
   });
 
@@ -70,16 +92,28 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     if (phase === "fetching") return options.loadedCount();
     if (phase === "content") return fsState?.searched ?? 0;
     if (phase === "done") return fsState?.total ?? 0;
+    if (phase === "error") return stoppedSearched;
     return 0;
   });
 
   const total = $derived.by((): number => {
     if (phase === "fetching") return options.loadedCount();
     if (phase === "content" || phase === "done") return fsState?.total ?? 0;
+    if (phase === "error") return stoppedTotal;
     return 0;
   });
 
   const canTrigger = $derived(hasCapability && phase === "idle");
+
+  function stop(searchedAtStop: number, totalAtStop: number): void {
+    stoppedSearched = searchedAtStop;
+    stoppedTotal = totalAtStop;
+    phase = "error";
+  }
+
+  function stopAfterFailedFetch(): void {
+    stop(options.loadedCount(), options.totalCount() ?? options.loadedCount());
+  }
 
   /**
    * Resolve once no page fetch is in flight. Also gives up if the run was
@@ -113,15 +147,22 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
         if ((phase as string) !== "fetching") return;
         continue;
       }
+      let result: { readonly isFetchNextPageError: boolean };
       try {
-        await options.fetchNextPage();
+        result = await options.fetchNextPage();
       } catch {
-        // Stop here rather than matching over a partial page set. Terminal,
-        // so the run does not silently present itself as complete coverage.
-        phase = "error";
+        // Only a run still fetching may record the failure; an abandoned
+        // run (term changed, overlay closed) has already been reset.
+        if ((phase as string) === "fetching") stopAfterFailedFetch();
         return;
       }
       if ((phase as string) !== "fetching") return;
+      if (result.isFetchNextPageError) {
+        // Stop here rather than matching over a partial page set. Terminal,
+        // so the run never presents itself as complete coverage.
+        stopAfterFailedFetch();
+        return;
+      }
     }
 
     // Content search (skip if search sheet already completed it)
@@ -133,12 +174,22 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     }
   }
 
-  // Transition to done when content search completes
+  // Settle the content phase when the provider's run completes or stops.
   $effect(() => {
-    if (phase === "content" && fsState?.status === "done") {
+    if (phase !== "content") return;
+    if (fsState?.status === "done") {
       phase = "done";
+    } else if (fsState?.status === "incomplete") {
+      stop(fsState.searched, fsState.total);
     }
   });
+
+  function retryStoppedRun(): void {
+    if (phase !== "error") return;
+    resetFullSearchForProvider(options.providerId);
+    phase = "idle";
+    void doTrigger();
+  }
 
   // Reset when term changes or overlay closes during/after deep search
   $effect(() => {
@@ -173,7 +224,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   });
 
   return {
-    get status(): "idle" | "searching" | "done" {
+    get status(): DeepSearchStatus {
       return status;
     },
     get searched(): number {
@@ -193,6 +244,9 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     },
     scheduleFromNavigation(): void {
       pendingFromUrl = true;
+    },
+    retry(): void {
+      retryStoppedRun();
     },
   };
 }

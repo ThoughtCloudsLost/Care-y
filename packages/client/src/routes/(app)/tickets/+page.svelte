@@ -540,6 +540,22 @@
     return matchTitles(entries, overlay.term, fuzzySearch);
   });
 
+  // Unread and needs-attention are client-only toggles that never narrow
+  // the server page set, so only the server params decide whether the
+  // org-wide counts total still describes the list being paged.
+  const serverFiltersActive = $derived.by((): boolean => {
+    const p = filterStore.serverParams;
+    return (
+      p.statuses !== undefined ||
+      p.onHold !== undefined ||
+      p.queueIds !== undefined ||
+      p.priorities !== undefined ||
+      p.assignedTo !== undefined ||
+      p.createdAfter !== undefined ||
+      p.createdBefore !== undefined
+    );
+  });
+
   const deepSearch = createDeepSearch({
     overlay,
     providerId: "tickets",
@@ -548,6 +564,11 @@
     fetchNextPage: async () => ticketsQuery.fetchNextPage(),
     isInitialLoading: () => ticketsQuery.isLoading,
     loadedCount: () => allTickets.length,
+    // The counts query totals the whole org while a run under a server
+    // filter pages a narrower list, so the total is withheld there and the
+    // stopped line reports the loaded count.
+    totalCount: () =>
+      serverFiltersActive ? undefined : countsQuery.data?.total,
     matchCount: () => titleMatchIds.length,
   });
 
@@ -1215,6 +1236,12 @@
     deepSearchStatus={deepSearch.status}
     deepSearchSearched={deepSearch.searched}
     deepSearchTotal={deepSearch.total}
+    ondeepsearchretry={deepSearch.retry}
+    deepSearchIncompleteText={deepSearch.status === "incomplete"
+      ? m.search_deep_incomplete(
+          withTerms({ searched: deepSearch.searched, total: deepSearch.total }),
+        )
+      : undefined}
   />
 {/snippet}
 

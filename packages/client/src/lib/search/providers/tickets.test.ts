@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { RawCachedTicket } from "./tickets.js";
+import type { RawCachedTicket, TicketSearchProviderDeps } from "./tickets.js";
 import { createTicketSearchProvider } from "./tickets.js";
 import type { CoverageState, FullSearchState } from "../types.js";
 import type * as Messages from "$lib/paraglide/messages.js";
@@ -23,6 +23,12 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     `Searched all ${String(p.total)} ${p.tickets} unlocked on this device.`,
   search_fetch_more_tickets: (p: { count: number; tickets: string }) =>
     `Search the other ${String(p.count)} ${p.tickets}`,
+  search_deep_incomplete: (p: {
+    searched: number;
+    total: number;
+    tickets: string;
+  }) =>
+    `Deeper search stopped. Searched ${String(p.searched)} of ${String(p.total)} ${p.tickets}.`,
 }));
 
 // vi.mock required: withTerms resolves org terminology through a Svelte
@@ -176,6 +182,18 @@ describe("createTicketSearchProvider", () => {
           fsTotal: 120,
         }),
       ).toBe("Searching 40 of 120...");
+    });
+
+    it("reports how far a stopped full search got", () => {
+      expect(
+        cov({
+          searched: 100,
+          total: 400,
+          fullSearch: "incomplete",
+          fsSearched: 120,
+          fsTotal: 400,
+        }),
+      ).toBe("Deeper search stopped. Searched 120 of 400 tickets.");
     });
 
     it("stays silent before anything is cached", () => {
@@ -336,6 +354,10 @@ describe("ticket fullSearch (two-phase)", () => {
     decryptTitle?: (id: string) => string | undefined;
     /** Runs on every listAll call, before the page is returned. */
     onListAll?: () => void;
+    /** listAll call index (0-based) that rejects instead of returning a page. */
+    failListAllAt?: number;
+    getTotalItemCount?: () => number | undefined;
+    contentSearch?: TicketSearchProviderDeps["contentSearch"];
   }): ReturnType<typeof createTicketSearchProvider> {
     const pages = overrides.listAllPages ?? [];
     let pageIndex = 0;
@@ -350,7 +372,11 @@ describe("ticket fullSearch (two-phase)", () => {
         cacheKey.startsWith("queue:") ? "General" : null,
       currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
+      getTotalItemCount: overrides.getTotalItemCount,
       listAll: vi.fn(async () => {
+        if (pageIndex === overrides.failListAllAt) {
+          throw new Error("Network error");
+        }
         const page = pages[pageIndex] ?? [];
         pageIndex++;
         overrides.onListAll?.();
@@ -359,10 +385,12 @@ describe("ticket fullSearch (two-phase)", () => {
       ingestTickets: vi.fn(),
       whenDecryptsSettled: vi.fn(async () => undefined),
       decryptFollowUp: vi.fn((_tid: string, fid: string) => decryptedFu[fid]),
-      contentSearch: vi.fn(async () => ({
-        followups: overrides.contentSearchFollowups ?? [],
-        total: overrides.contentSearchFollowups?.length ?? 0,
-      })),
+      contentSearch:
+        overrides.contentSearch ??
+        vi.fn(async () => ({
+          followups: overrides.contentSearchFollowups ?? [],
+          total: overrides.contentSearchFollowups?.length ?? 0,
+        })),
     });
   }
 
@@ -483,34 +511,147 @@ describe("ticket fullSearch (two-phase)", () => {
     expect(onProgress).toHaveBeenCalled();
   });
 
-  it("preserves Title search matches when Content search fails", async () => {
+  it("rejects when Content search fails, keeping Title search matches and progress", async () => {
     const tickets = [
       makeRawTicket({ id: "t1", keyWrap: KW }),
       makeRawTicket({ id: "t2", keyWrap: KW }),
     ];
+    const state = makeState();
+    let searchedBeforeChunk: number | undefined;
 
-    const provider = createTicketSearchProvider({
-      getAllCachedTickets: () => tickets,
+    const provider = createFullSearchProvider({
+      listAllPages: [tickets],
       decryptTitle: (id: string) =>
         id === "t1" ? "Housing request" : "Other topic",
-      orgDecrypt: (cacheKey: string) =>
-        cacheKey.startsWith("queue:") ? "General" : null,
-      currentUserId: () => "viewer-1",
-      getPreviewFollowUps: () => undefined,
-      listAll: vi.fn(async () => tickets),
-      ingestTickets: vi.fn(),
-      whenDecryptsSettled: vi.fn(async () => undefined),
-      decryptFollowUp: vi.fn(() => undefined),
       contentSearch: vi.fn(async () => {
+        searchedBeforeChunk = state.searched;
         throw new Error("Network error");
       }),
     });
 
-    const state = makeState();
-    await provider.fullSearch!("Housing", state, vi.fn(), liveSignal());
+    await expect(
+      provider.fullSearch!("Housing", state, vi.fn(), liveSignal()),
+    ).rejects.toThrow("Network error");
 
-    // Title search match on t1 preserved despite Content search network failure
+    // Title search match on t1 survives the Content search failure.
     expect(state.matchCount).toBe(1);
+    // t1 is settled by its title; the failed chunk adds nothing.
+    expect(searchedBeforeChunk).toBe(1);
+    expect(state.searched).toBe(1);
+    expect(state.total).toBe(2);
+  });
+
+  it("rejects when listing fails, reporting the server total and nothing searched", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) =>
+      makeRawTicket({ id: `p1-${i}`, keyWrap: KW }),
+    );
+    const provider = createFullSearchProvider({
+      listAllPages: [page1, page1],
+      decryptTitle: () => "Unrelated topic",
+      failListAllAt: 1,
+      getTotalItemCount: () => 900,
+    });
+
+    const state = makeState();
+    await expect(
+      provider.fullSearch!("Housing", state, vi.fn(), liveSignal()),
+    ).rejects.toThrow("Network error");
+
+    expect(state.total).toBe(900);
+    expect(state.searched).toBe(0);
+  });
+
+  it("falls back to the loaded count as the total when listing fails without a server count", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) =>
+      makeRawTicket({ id: `p1-${i}`, keyWrap: KW }),
+    );
+    const provider = createFullSearchProvider({
+      listAllPages: [page1, page1],
+      decryptTitle: () => "Unrelated topic",
+      failListAllAt: 1,
+    });
+
+    const state = makeState();
+    await expect(
+      provider.fullSearch!("Housing", state, vi.fn(), liveSignal()),
+    ).rejects.toThrow("Network error");
+
+    expect(state.total).toBe(100);
+    expect(state.searched).toBe(0);
+  });
+
+  it("content-searches in chunks of 500 and counts each settled chunk", async () => {
+    const nonMatching = Array.from({ length: 1200 }, (_, i) =>
+      makeRawTicket({ id: `n-${i}`, keyWrap: KW }),
+    );
+    const matching = Array.from({ length: 3 }, (_, i) =>
+      makeRawTicket({ id: `m-${i}`, keyWrap: KW }),
+    );
+    const all = [...nonMatching, ...matching];
+    const pages: RawCachedTicket[][] = [];
+    for (let i = 0; i < all.length; i += 100) {
+      pages.push(all.slice(i, i + 100));
+    }
+
+    const state = makeState();
+    const CONTENT_PAGE_SIZE = 50;
+    // state.searched as each chunk's first page is requested.
+    const searchedAtChunkStart: number[] = [];
+    const contentSearch = vi.fn(
+      async (ticketIds: string[], page: number, pageSize: number) => {
+        if (page === 1) searchedAtChunkStart.push(state.searched);
+        // A full first page forces a second request; the second is short.
+        const count = page === 1 ? pageSize : 0;
+        return {
+          followups: ticketIds.slice(0, count).map((ticketId, i) => ({
+            ticketId,
+            followupId: `fu-${ticketId}-${String(i)}`,
+            encryptedContent: "encrypted-note",
+          })),
+          total: count,
+        };
+      },
+    );
+
+    const provider = createFullSearchProvider({
+      listAllPages: pages,
+      decryptTitle: (id: string) =>
+        id.startsWith("m-") ? "Housing help" : "Unrelated topic",
+      contentSearch,
+    });
+
+    const snapshots: { searched: number; total: number }[] = [];
+    const onProgress = vi.fn(() => {
+      snapshots.push({ searched: state.searched, total: state.total });
+    });
+    await provider.fullSearch!("Housing", state, onProgress, liveSignal());
+
+    const nonMatchingIds = nonMatching.map((t) => t.id);
+    expect(
+      contentSearch.mock.calls.map(([ids, page, pageSize]) => [
+        ids,
+        page,
+        pageSize,
+      ]),
+    ).toEqual([
+      [nonMatchingIds.slice(0, 500), 1, CONTENT_PAGE_SIZE],
+      [nonMatchingIds.slice(0, 500), 2, CONTENT_PAGE_SIZE],
+      [nonMatchingIds.slice(500, 1000), 1, CONTENT_PAGE_SIZE],
+      [nonMatchingIds.slice(500, 1000), 2, CONTENT_PAGE_SIZE],
+      [nonMatchingIds.slice(1000, 1200), 1, CONTENT_PAGE_SIZE],
+      [nonMatchingIds.slice(1000, 1200), 2, CONTENT_PAGE_SIZE],
+    ]);
+
+    expect(state.total).toBe(1203);
+    // The second chunk starts once the first is settled: the title
+    // matches plus the first 500.
+    expect(searchedAtChunkStart).toEqual([3, 3 + 500, 3 + 1000]);
+    expect(state.searched).toBe(state.total);
+    // While listing, the total is not known yet (0); once it is, searched
+    // never runs past it.
+    for (const snap of snapshots.filter((s) => s.total > 0)) {
+      expect(snap.searched).toBeLessThanOrEqual(snap.total);
+    }
   });
 
   it("registers fullSearch only when all deps are provided", () => {
