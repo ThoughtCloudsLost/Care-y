@@ -89,10 +89,12 @@ async function callTrpc(
     );
   }
   const body: unknown = JSON.parse(outcome.text);
-  if (!isRecord(body) || !isRecord(body.result) || !("data" in body.result)) {
+  if (!isRecord(body) || !isRecord(body.result)) {
     throw new E2eError(`${procedure} returned an unexpected shape`);
   }
-  return body.result.data;
+  // A mutation that returns nothing (removeQueueMember, addQueueMember)
+  // serialises as a result with no data key.
+  return "data" in body.result ? body.result.data : undefined;
 }
 
 /** The signed-in account's user id, from auth.me. */
