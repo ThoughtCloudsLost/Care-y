@@ -138,9 +138,6 @@
       </button>
     </div>
 
-    <!-- Exposure slot (placeholder for 6k) -->
-    <div class="panel-exposure-slot"></div>
-
     <!-- Admin destinations grouped by concern -->
     {#each visibleGroups as group (group)}
       <List nested>
@@ -291,10 +288,5 @@
 
   .panel-role:active {
     opacity: 0.7;
-  }
-
-  .panel-exposure-slot {
-    /* Reserved for Exposure status bar */
-    display: contents;
   }
 </style>
