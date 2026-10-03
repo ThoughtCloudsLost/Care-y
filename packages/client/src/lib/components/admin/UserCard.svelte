@@ -247,10 +247,12 @@
     border-radius: var(--card-radius);
   }
 
-  /* A deactivated account is a records fact: the whole card goes quiet
-     (the closed-row treatment), no alarm hue anywhere. */
-  .card-inner--inactive {
-    opacity: 0.52;
+  /* A deactivated account is a records fact: the name drops to the muted
+     ink beside its Inactive badge, no alarm hue anywhere. Said through the
+     token, as closed tickets are; a whole-card fade pulled the seal
+     initials and the muted meta under 4.5:1 on the dark surfaces. */
+  .card-inner--inactive .name-row {
+    color: var(--muted);
   }
 
   /* ── Avatar: the shared identity-seal anatomy, sized per mode ── */
