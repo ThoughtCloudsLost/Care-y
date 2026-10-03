@@ -209,29 +209,33 @@ jobs:
             [ "$r" = "success" ] || { echo "::error::a CI leg did not succeed ($RESULTS)"; exit 1; }
           done
 
-      # The template's "CI run green" box is ticked here with the run link,
-      # and re-ticked on every rerun so it always names the run that passed.
-      # Only same-repository pull requests reach this: a fork's token is
-      # read-only and the edit would be refused.
-      - name: Tick the Testing box on the pull request
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      # The template's "CI run green" line is rewritten after every run.
+      # Every leg passed: ticked, with the run link. A leg failed: unticked,
+      # with the link. The body then describes the latest run and not an
+      # earlier one. Only same-repository pull requests reach this: a fork's
+      # token is read-only and the edit would be refused.
+      - name: Write the CI line on the pull request
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body --jq .body > body.md
-          python3 - "$RUN_URL" <<'EOF'
+          python3 - "$RUN_URL" "$RESULTS" <<'EOF'
           import re, sys
-          url = sys.argv[1]
+          url, results = sys.argv[1], sys.argv[2].split()
+          green = all(r == "success" for r in results)
           body = open("body.md").read()
           line = re.compile(r"^- \[[ x]\] CI run green on this pull request.*$", re.M)
           if not line.search(body):
-              print("no CI box in the body, nothing to tick")
+              print("no CI line in the body, nothing to write")
               sys.exit(0)
-          body = line.sub(f"- [x] CI run green on this pull request ([run]({url}))", body, count=1)
-          open("body.md", "w").write(body)
-          print("ticked")
+          text = (f"- [x] CI run green on this pull request ([run]({url}))" if green
+                  else f"- [ ] CI run green on this pull request ([run failed]({url}))")
+          open("body.md", "w").write(line.sub(text, body, count=1))
+          print("green" if green else "failed")
           EOF
           gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --body-file body.md
 
