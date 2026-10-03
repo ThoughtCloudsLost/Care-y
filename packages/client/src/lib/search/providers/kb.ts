@@ -84,13 +84,15 @@ export interface KBSearchProviderDeps {
   readonly resolveAuthorName: (userId: string) => string | null;
   /** Pre-populate the categories query cache so resolveCategoryName works on first search. */
   readonly ensureCategoriesLoaded: () => Promise<void>;
-  /** Fetch encrypted article bodies for full-text search. Max 200 items. */
+  /** Fetch encrypted article bodies for full-text search. At most 200 ids per call; the provider batches. */
   readonly fetchBodies?: (
     itemIds: string[],
   ) => Promise<readonly { id: string; encryptedBody: string }[]>;
 }
 
 const EXCERPT_MAX_CHARS = 200;
+/** listKbBodiesInputSchema caps itemIds at 200 per request. */
+const BODY_BATCH_SIZE = 200;
 
 export function createKbSearchProvider(
   deps: KBSearchProviderDeps,
@@ -262,7 +264,17 @@ export function createKbSearchProvider(
       contentMatchIds.clear();
       lastFullSearchQuery = query;
 
-      await loadAll();
+      try {
+        await loadAll();
+      } catch (err) {
+        // Record how far the run got before the registry marks it
+        // incomplete: no body was read, and the total is the server's count
+        // when the load saw one.
+        state.total = totalItemCount ?? cache.size;
+        state.searched = 0;
+        onProgress();
+        throw err;
+      }
       if (aborted()) return;
 
       deepSearchActive = true;
@@ -270,42 +282,48 @@ export function createKbSearchProvider(
         provider.search(query).results.map((r) => r.id),
       );
       deepSearchActive = false;
-      state.matchCount = titleMatchIds.size;
-      state.total = cache.size;
-      state.searched = cache.size;
-      onProgress();
 
       const nonMatchingIds: string[] = [];
       for (const [id] of cache) {
         if (!titleMatchIds.has(id)) nonMatchingIds.push(id);
       }
 
+      state.matchCount = titleMatchIds.size;
+      state.total = cache.size;
+      // Title matches are settled; the rest are settled batch by batch.
+      state.searched = cache.size - nonMatchingIds.length;
+      onProgress();
       if (nonMatchingIds.length === 0) return;
 
-      let bodies: readonly { id: string; encryptedBody: string }[];
-      try {
-        bodies = await fetchBodies(nonMatchingIds);
-      } catch {
-        return;
-      }
-
-      for (const body of bodies) {
-        // Every iteration awaits a decrypt, so a newer run can start at any
-        // point in this loop and find its cleared match set refilling.
+      for (
+        let start = 0;
+        start < nonMatchingIds.length;
+        start += BODY_BATCH_SIZE
+      ) {
         if (aborted()) return;
-        if (contentMatchIds.has(body.id)) continue;
-        const plaintext = await deps.decryptOrg(
-          `kb-search:${body.id}:body`,
-          body.encryptedBody,
-          { table: "kb_items", id: body.id },
-        );
-        if (plaintext === null) continue;
+        const batchIds = nonMatchingIds.slice(start, start + BODY_BATCH_SIZE);
+        const bodies = await fetchBodies(batchIds);
+        for (const body of bodies) {
+          // Every iteration awaits a decrypt, so a newer run can start at any
+          // point in this loop and find its cleared match set refilling.
+          if (aborted()) return;
+          if (contentMatchIds.has(body.id)) continue;
+          const plaintext = await deps.decryptOrg(
+            `kb-search:${body.id}:body`,
+            body.encryptedBody,
+            { table: "kb_items", id: body.id },
+          );
+          if (plaintext === null) continue;
 
-        if (fuzzySearch([plaintext], query).length > 0) {
-          contentMatchIds.add(body.id);
-          state.matchCount++;
-          onProgress();
+          if (fuzzySearch([plaintext], query).length > 0) {
+            contentMatchIds.add(body.id);
+            state.matchCount++;
+            onProgress();
+          }
         }
+        if (aborted()) return;
+        state.searched += batchIds.length;
+        onProgress();
       }
     };
   }

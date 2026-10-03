@@ -304,6 +304,8 @@ export function createTicketSearchProvider(
     ): Promise<void> => {
       const PAGE_SIZE = 100;
       const CONTENT_PAGE_SIZE = 50;
+      // contentSearchInputSchema caps ticketIds at 500 per request.
+      const CONTENT_CHUNK_SIZE = 500;
 
       // Read through a call, not `signal.aborted` directly: TypeScript
       // narrows the property to false after the first check and never
@@ -327,8 +329,14 @@ export function createTicketSearchProvider(
         let page: readonly RawCachedTicket[];
         try {
           page = await listAll(cursor);
-        } catch {
-          break;
+        } catch (err) {
+          // Record how far the run got before the registry marks it
+          // incomplete: nothing was content-searched yet, and the total is
+          // the server's count when known.
+          state.total = deps.getTotalItemCount?.() ?? totalLoaded;
+          state.searched = 0;
+          onProgress();
+          throw err;
         }
 
         totalLoaded += page.length;
@@ -370,79 +378,90 @@ export function createTicketSearchProvider(
       const nonMatchingIds = allTicketIds.filter(
         (id) => !titleMatchIds.has(id) && ticketKeyWraps.has(id),
       );
+      // Everything outside the content pass is settled: title matches, and
+      // tickets with no key wrap (no title or follow-up can be read).
+      state.searched = state.total - nonMatchingIds.length;
+      onProgress();
       if (nonMatchingIds.length === 0) return;
 
-      let contentPage = 1;
+      for (
+        let start = 0;
+        start < nonMatchingIds.length;
+        start += CONTENT_CHUNK_SIZE
+      ) {
+        const chunk = nonMatchingIds.slice(start, start + CONTENT_CHUNK_SIZE);
+        let contentPage = 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- loop breaks on short page
-      while (true) {
-        if (aborted()) return;
-        let batch: Awaited<ReturnType<typeof contentSearch>>;
-        try {
-          batch = await contentSearch(
-            nonMatchingIds,
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- loop breaks on short page
+        while (true) {
+          if (aborted()) return;
+          const batch = await contentSearch(
+            chunk,
             contentPage,
             CONTENT_PAGE_SIZE,
           );
-        } catch {
-          break;
-        }
 
-        // Trigger decrypts for all follow-ups in this batch
-        const pendingFollowUps: {
-          ticketId: string;
-          followupId: string;
-          kw: KeyWrap;
-          ciphertext: string;
-        }[] = [];
+          // Trigger decrypts for all follow-ups in this batch
+          const pendingFollowUps: {
+            ticketId: string;
+            followupId: string;
+            kw: KeyWrap;
+            ciphertext: string;
+          }[] = [];
 
-        for (const fu of batch.followups) {
-          if (
-            titleMatchIds.has(fu.ticketId) ||
-            contentMatchIds.has(fu.ticketId)
-          )
-            continue;
-          const kw = ticketKeyWraps.get(fu.ticketId);
-          if (!kw) continue;
-          decryptFollowUp(fu.ticketId, fu.followupId, kw, fu.encryptedContent);
-          pendingFollowUps.push({
-            ticketId: fu.ticketId,
-            followupId: fu.followupId,
-            kw,
-            ciphertext: fu.encryptedContent,
-          });
-        }
-
-        await whenDecryptsSettled();
-        // Checked again after the await: past this point the loop starts
-        // adding to contentMatchIds, which a newer run has already cleared.
-        if (aborted()) return;
-
-        // Check decrypted content for matches
-        for (const pf of pendingFollowUps) {
-          if (contentMatchIds.has(pf.ticketId)) continue;
-          const plaintext = decryptFollowUp(
-            pf.ticketId,
-            pf.followupId,
-            pf.kw,
-            pf.ciphertext,
-          );
-          if (
-            plaintext !== undefined &&
-            plaintext !== DECRYPT_ERROR_SENTINEL &&
-            fuzzySearch([plaintext], query).length > 0
-          ) {
-            contentMatchIds.add(pf.ticketId);
-            state.matchCount++;
-            onProgress();
+          for (const fu of batch.followups) {
+            if (
+              titleMatchIds.has(fu.ticketId) ||
+              contentMatchIds.has(fu.ticketId)
+            )
+              continue;
+            const kw = ticketKeyWraps.get(fu.ticketId);
+            if (!kw) continue;
+            decryptFollowUp(
+              fu.ticketId,
+              fu.followupId,
+              kw,
+              fu.encryptedContent,
+            );
+            pendingFollowUps.push({
+              ticketId: fu.ticketId,
+              followupId: fu.followupId,
+              kw,
+              ciphertext: fu.encryptedContent,
+            });
           }
+
+          await whenDecryptsSettled();
+          // Checked again after the await: past this point the loop starts
+          // adding to contentMatchIds, which a newer run has already cleared.
+          if (aborted()) return;
+
+          // Check decrypted content for matches
+          for (const pf of pendingFollowUps) {
+            if (contentMatchIds.has(pf.ticketId)) continue;
+            const plaintext = decryptFollowUp(
+              pf.ticketId,
+              pf.followupId,
+              pf.kw,
+              pf.ciphertext,
+            );
+            if (
+              plaintext !== undefined &&
+              plaintext !== DECRYPT_ERROR_SENTINEL &&
+              fuzzySearch([plaintext], query).length > 0
+            ) {
+              contentMatchIds.add(pf.ticketId);
+              state.matchCount++;
+              onProgress();
+            }
+          }
+
+          if (batch.followups.length < CONTENT_PAGE_SIZE) break;
+          contentPage++;
         }
 
-        state.searched = totalLoaded + contentPage * CONTENT_PAGE_SIZE;
+        state.searched += chunk.length;
         onProgress();
-
-        if (batch.followups.length < CONTENT_PAGE_SIZE) break;
-        contentPage++;
       }
     };
   }

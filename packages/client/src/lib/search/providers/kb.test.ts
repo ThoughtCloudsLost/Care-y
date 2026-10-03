@@ -457,7 +457,7 @@ describe("KB fullSearch (body content)", () => {
     expect(state.searched).toBe(3);
   });
 
-  it("preserves title matches when fetchBodies fails", async () => {
+  it("rejects when fetchBodies fails, keeping title matches", async () => {
     const deps: Omit<KBSearchProviderDeps, "fetchBodies"> & {
       fetchBodies: KBSearchProviderDeps["fetchBodies"];
     } = {
@@ -475,10 +475,151 @@ describe("KB fullSearch (body content)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("intake", state, vi.fn(), liveSignal());
+    await expect(
+      provider.fullSearch!("intake", state, vi.fn(), liveSignal()),
+    ).rejects.toThrow("Network error");
 
     // a1 matched on title via search(), matchCount reflects title matches
     expect(state.matchCount).toBe(1);
+  });
+
+  describe("batched body search", () => {
+    const NON_MATCHING = 450;
+    const TITLE_MATCHES = 2;
+    // Title matches go last so the non-matching ids keep item order.
+    const nonMatchingIds = Array.from(
+      { length: NON_MATCHING },
+      (_, i) => `n-${String(i)}`,
+    );
+    const bulkItems: RawKBItem[] = [
+      ...nonMatchingIds.map((id) => makeRawItem({ id })),
+      ...Array.from({ length: TITLE_MATCHES }, (_, i) =>
+        makeRawItem({ id: `m-${String(i)}` }),
+      ),
+    ];
+
+    function createBulkDeps(
+      fetchBodies: NonNullable<KBSearchProviderDeps["fetchBodies"]>,
+    ): KBSearchProviderDeps {
+      return {
+        ...createDeps(bulkItems),
+        decryptOrg: async (cacheKey: string, ciphertext: unknown) => {
+          if (ciphertext === null) return null;
+          const match = /^kb-search:(.+?):(title|excerpt|body)$/.exec(cacheKey);
+          if (!match) return null;
+          const [, id, field] = match;
+          if (!id || !field) return null;
+          if (field === "title") {
+            return id.startsWith("m-") ? "Danger protocol" : "Unrelated topic";
+          }
+          if (field === "excerpt") return "Plain summary";
+          return "Nothing relevant here";
+        },
+        fetchBodies,
+      };
+    }
+
+    it("fetches bodies in batches of 200 and counts each settled batch", async () => {
+      const state = makeState();
+      // state.searched as each batch is requested.
+      const searchedAtBatchStart: number[] = [];
+      const fetchBodies = vi.fn(async (itemIds: string[]) => {
+        searchedAtBatchStart.push(state.searched);
+        return itemIds.map((id) => ({ id, encryptedBody: "Yw" }));
+      });
+      const provider = createKbSearchProvider(createBulkDeps(fetchBodies));
+
+      await provider.fullSearch!("danger", state, vi.fn(), liveSignal());
+
+      expect(fetchBodies.mock.calls.map(([ids]) => ids)).toEqual([
+        nonMatchingIds.slice(0, 200),
+        nonMatchingIds.slice(200, 400),
+        nonMatchingIds.slice(400, 450),
+      ]);
+      expect(searchedAtBatchStart).toEqual([
+        TITLE_MATCHES,
+        TITLE_MATCHES + 200,
+        TITLE_MATCHES + 400,
+      ]);
+      expect(state.total).toBe(NON_MATCHING + TITLE_MATCHES);
+      expect(state.searched).toBe(state.total);
+      expect(state.matchCount).toBe(TITLE_MATCHES);
+    });
+
+    it("rejects when a later batch fails, keeping the batches already settled", async () => {
+      let calls = 0;
+      const fetchBodies = vi.fn(async (itemIds: string[]) => {
+        calls++;
+        if (calls === 2) throw new Error("Network error");
+        return itemIds.map((id) => ({ id, encryptedBody: "Yw" }));
+      });
+      const provider = createKbSearchProvider(createBulkDeps(fetchBodies));
+
+      const state = makeState();
+      await expect(
+        provider.fullSearch!("danger", state, vi.fn(), liveSignal()),
+      ).rejects.toThrow("Network error");
+
+      expect(fetchBodies).toHaveBeenCalledTimes(2);
+      expect(state.searched).toBe(TITLE_MATCHES + 200);
+      expect(state.total).toBe(NON_MATCHING + TITLE_MATCHES);
+    });
+  });
+
+  describe("article load failure", () => {
+    function createFailingLoadDeps(
+      firstPageTotal: number | undefined,
+    ): KBSearchProviderDeps {
+      let calls = 0;
+      return {
+        ...createFullSearchDeps(),
+        fetchPage: vi.fn(
+          async (): Promise<{
+            items: readonly RawKBItem[];
+            nextCursor: string | null;
+            total?: number;
+          }> => {
+            calls++;
+            if (calls === 2) throw new Error("Network error");
+            return {
+              items: testItems,
+              nextCursor: "cursor-2",
+              ...(firstPageTotal !== undefined
+                ? { total: firstPageTotal }
+                : {}),
+            };
+          },
+        ),
+      };
+    }
+
+    it("rejects with nothing searched and the server total from an earlier page", async () => {
+      const deps = createFailingLoadDeps(10);
+      const provider = createKbSearchProvider(deps);
+
+      const state = makeState();
+      await expect(
+        provider.fullSearch!("intake", state, vi.fn(), liveSignal()),
+      ).rejects.toThrow("Network error");
+
+      expect(state.searched).toBe(0);
+      expect(state.total).toBe(10);
+      expect(deps.fetchBodies).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the cached count as the total when no page carried one", async () => {
+      const deps = createFailingLoadDeps(undefined);
+      const provider = createKbSearchProvider(deps);
+
+      const state = makeState();
+      await expect(
+        provider.fullSearch!("intake", state, vi.fn(), liveSignal()),
+      ).rejects.toThrow("Network error");
+
+      expect(state.searched).toBe(0);
+      // The first page's three articles landed in the cache before the failure.
+      expect(state.total).toBe(3);
+    });
   });
 
   it("registers fullSearch only when fetchBodies is provided", () => {
