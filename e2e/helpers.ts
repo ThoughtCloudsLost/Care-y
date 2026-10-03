@@ -370,14 +370,31 @@ async function loginAttempt(
  * The wizard nav renders Next/Confirm as Konsta Link elements in the navbar.
  */
 async function completeOnboarding(page: Page, username: string): Promise<void> {
-  // Wait for the onboarding content to load.
-  await page.waitForTimeout(2_000);
-  if (page.url().endsWith("/")) return;
-
-  // Step 1: Security briefing (4 sub-pages, if present)
-  // Heading: "How CARE-Y Protects Your Data"
+  // The wizard shows whichever step is still needed: the security briefing
+  // (four sub-pages), then TOTP enrollment, or neither (straight to /).
+  // Race the three outcomes instead of sleeping and sampling isVisible():
+  // isVisible() ignores its timeout option and answers at once, so a step
+  // that has not painted yet reads as "not needed" and its clicks are
+  // skipped. That is how a fresh volunteer's first login on a CI runner
+  // sat on page one of the briefing while the helper waited for the 2FA
+  // heading (2026-10-03). Every spec's login runs through here.
   const briefingHeading = page.getByText("How CARE-Y Protects Your Data");
-  if (await briefingHeading.isVisible({ timeout: 3_000 }).catch(() => false)) {
+  const twofaHeading = page.getByText("Set Up Two-Factor Authentication");
+  const firstStep = await Promise.race([
+    briefingHeading
+      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .then(() => "briefing" as const),
+    twofaHeading
+      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .then(() => "2fa" as const),
+    page
+      .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
+      .then(() => "done" as const),
+  ]);
+  console.log(`[onboarding] first step: ${firstStep}`);
+  if (firstStep === "done") return;
+
+  if (firstStep === "briefing") {
     // Click through 3 sub-pages via the wizard navbar's "Next" link.
     // The onboarding layout marks its navbar with role="banner".
     for (let i = 0; i < 3; i++) {
@@ -386,30 +403,22 @@ async function completeOnboarding(page: Page, username: string): Promise<void> {
     }
     // Last page: "Confirm"
     await page.getByRole("banner").getByText("Confirm").click();
-    await page.waitForTimeout(1_000);
   }
 
-  if (page.url().endsWith("/")) return;
-
-  // Step 2: TOTP enrollment (if present)
-  // Heading: "Set Up Two-Factor Authentication"
-  //
-  // Race the heading against the dashboard redirect that means onboarding
-  // finished without this step. Sampling isVisible() instead would return
-  // immediately (its timeout option is ignored), so a wizard step that has
-  // not painted yet reads as "already enrolled" and enrollment is skipped
-  // with no assertion to catch it. Every spec's login runs through here.
-  const twofaHeading = page.getByText("Set Up Two-Factor Authentication");
-  const enrollmentShown = await Promise.race([
-    twofaHeading
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
-      .then(() => true)
-      .catch(() => false),
-    page
-      .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
-      .then(() => false)
-      .catch(() => false),
-  ]);
+  // Step 2: TOTP enrollment (if present). After the briefing the wizard
+  // either shows the 2FA heading or finishes to /; race the two.
+  const enrollmentShown =
+    firstStep === "2fa" ||
+    (await Promise.race([
+      twofaHeading
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(() => true)
+        .catch(() => false),
+      page
+        .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
+        .then(() => false)
+        .catch(() => false),
+    ]));
 
   if (enrollmentShown) {
     await enrollTotp(page, username);
