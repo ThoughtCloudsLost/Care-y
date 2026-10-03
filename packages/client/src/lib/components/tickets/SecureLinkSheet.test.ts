@@ -478,16 +478,20 @@ describe("SecureLinkSheet", () => {
     });
     await fireEvent.click(toggle);
 
-    // Words should be visible.
-    await waitFor(() => {
-      const wordsDisplay = screen.getByText(
-        (text) =>
-          text.includes("crane") ||
-          text.includes("velvet") ||
-          text.includes("monsoon"),
-      );
-      expect(wordsDisplay).toBeTruthy();
-    });
+    // Words should be visible. The default one-second wait is not enough on
+    // a loaded CI runner.
+    await waitFor(
+      () => {
+        const wordsDisplay = screen.getByText(
+          (text) =>
+            text.includes("crane") ||
+            text.includes("velvet") ||
+            text.includes("monsoon"),
+        );
+        expect(wordsDisplay).toBeTruthy();
+      },
+      { timeout: 5_000 },
+    );
 
     await fireEvent.click(
       screen.getByRole("button", { name: /set up secure link/i }),
