@@ -79,11 +79,13 @@ describe("FullSearchPanel", () => {
       ),
     ).toBeDefined();
     await fireEvent.click(trigger);
+    // The global search has no filters, so its run is unscoped.
     expect(fullSearch).toHaveBeenCalledWith(
       "housing",
       expect.anything(),
       expect.any(Function),
       expect.any(AbortSignal),
+      undefined,
     );
   });
 
