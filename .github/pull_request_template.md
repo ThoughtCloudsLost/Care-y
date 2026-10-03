@@ -36,8 +36,8 @@
 ## Testing
 
 - [ ] New/modified code has corresponding tests
-- [ ] `pnpm vitest run` passes locally
-- [ ] Coverage thresholds still met
+- [ ] CI run green on this pull request (the workflow ticks this)
+- [ ] Playwright or coverage-full run attached when the change warrants one
 
 ## Notes for Reviewers
 

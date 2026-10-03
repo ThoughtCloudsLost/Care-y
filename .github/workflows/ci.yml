@@ -196,7 +196,8 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
-    permissions: {}
+    permissions:
+      pull-requests: write # tick the Testing box on the pull request
 
     steps:
       - name: Every leg succeeded
@@ -207,6 +208,32 @@ jobs:
           for r in $RESULTS; do
             [ "$r" = "success" ] || { echo "::error::a CI leg did not succeed ($RESULTS)"; exit 1; }
           done
+
+      # The template's "CI run green" box is ticked here with the run link,
+      # and re-ticked on every rerun so it always names the run that passed.
+      # Only same-repository pull requests reach this: a fork's token is
+      # read-only and the edit would be refused.
+      - name: Tick the Testing box on the pull request
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body --jq .body > body.md
+          python3 - "$RUN_URL" <<'EOF'
+          import re, sys
+          url = sys.argv[1]
+          body = open("body.md").read()
+          line = re.compile(r"^- \[[ x]\] CI run green on this pull request.*$", re.M)
+          if not line.search(body):
+              print("no CI box in the body, nothing to tick")
+              sys.exit(0)
+          body = line.sub(f"- [x] CI run green on this pull request ([run]({url}))", body, count=1)
+          open("body.md", "w").write(body)
+          print("ticked")
+          EOF
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --body-file body.md
 
   # Host provisioning scripts run as root and edit auth-critical config.
   # shellcheck comes preinstalled on the runner image: no action, no install.
