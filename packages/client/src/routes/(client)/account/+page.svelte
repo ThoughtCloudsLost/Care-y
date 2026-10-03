@@ -39,7 +39,11 @@
     serializeContactCorrection,
     type ContactCorrectionPayload,
   } from "@care-y/shared";
-  import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
+  import {
+    requireRouter,
+    PortalUnavailableError,
+    isUnauthorizedTrpcError,
+  } from "$lib/errors.js";
   import {
     isPortalChannelDisabledError,
     splitContactEnvelope,
@@ -137,6 +141,10 @@
   let loginError = $state(false);
   let loginPhase = $state<LoginPhaseId>("idle");
   let signedOutMessage = $state("");
+  // Advances on every sign-in and sign-out; a password change keeps the
+  // session and does not advance it. A request that settles late writes
+  // only when no newer session or sign-out has happened since it began.
+  let sessionGeneration = 0;
   let changePasswordPending = $state(false);
   let changePasswordError = $state("");
   let hintShown = $state(false);
@@ -184,6 +192,7 @@
 
     // The server window only slides on human activity, throttled; sign-in
     // has just opened a fresh one.
+    const generation = sessionGeneration;
     const renewer = createAccountSessionRenewer({
       renew: async () =>
         requireRouter(
@@ -191,6 +200,9 @@
           "clientPortal",
         ).accountSessionRenew.mutate(),
       onUnauthorized: () => {
+        // A late answer from a renewer that belongs to an earlier session
+        // is ignored, so it cannot end a newer one or replace its note.
+        if (generation !== sessionGeneration || session === null) return;
         returnToLogin(m.account_signed_out());
       },
     });
@@ -323,6 +335,7 @@
             bridge.encryptReply(text, orgPub, tid, fid, kg),
         };
 
+        sessionGeneration++;
         session = handle;
         loginUsername = username;
         loginError = false;
@@ -683,11 +696,34 @@
   // Logout handler
   // ---------------------------------------------------------------------------
 
-  function handleLogout(): void {
+  async function handleLogout(): Promise<void> {
+    // No earlier note shows while this revoke is in flight
+    signedOutMessage = "";
+    const generation = ++sessionGeneration;
+    // Keys leave memory before the network call: revoking needs only the
+    // session cookie, and a slow or hanging request must not keep them.
+    returnToLogin();
+
+    // A revoke that settles after a newer sign-out, or after the user signed
+    // in again, leaves the current state alone
+    function settleSignOut(message: string): void {
+      if (generation === sessionGeneration && session === null) {
+        signedOutMessage = message;
+      }
+    }
+
     const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
-    void portalRouter.accountLogout.mutate().finally(() => {
-      returnToLogin(m.account_signed_out());
-    });
+    try {
+      await portalRouter.accountLogout.mutate();
+      settleSignOut(m.account_signed_out_voluntary());
+    } catch (err: unknown) {
+      // UNAUTHORIZED means the server holds no session to end
+      settleSignOut(
+        isUnauthorizedTrpcError(err)
+          ? m.account_signed_out_voluntary()
+          : m.account_signout_unconfirmed(),
+      );
+    }
   }
 
   /**
@@ -798,7 +834,7 @@
         label: m.account_logout(),
         icon: LogOut,
         destructive: true,
-        onclick: handleLogout,
+        onclick: () => void handleLogout(),
       },
     ];
   });

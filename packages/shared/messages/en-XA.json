@@ -3215,6 +3215,8 @@
   "account_intake_confirm_reminder": "⟦Yòùr ùsèrnàmè ìs  ••••••{username}. Sìgn ìn àny tìmè àt /àccòùnt òn thìs sìtè. Yòùr pàsswòrd ìs nèvèr shòwn òr sènt ànywhèrè. ••••••••••••••••••••••••••••⟧",
   "account_idle_warning": "⟦Yòùr sèssìòn wìll ènd sòòn dùè tò ìnàctìvìty. Àny àctìvìty kèèps ìt sìgnèd ìn. ••••••••••••••••••••••••⟧",
   "account_signed_out": "⟦Yòù wèrè sìgnèd òùt tò pròtèct yòùr mèssàgès. Sìgn ìn tò còntìnùè. ••••••••••••••••••••⟧",
+  "account_signed_out_voluntary": "⟦Yòù àrè sìgnèd òùt. Sìgn ìn tò còntìnùè. ••••••••••••⟧",
+  "account_signout_unconfirmed": "⟦Yòù àrè sìgnèd òùt òn thìs dèvìcè, bùt thè sèrvèr dìd nòt cònfìrm ìt. •••••••••••••••••••••⟧",
   "account_new_password": "⟦Nèw pàsswòrd ••••⟧",
   "account_confirm_new_password": "⟦Cònfìrm nèw pàsswòrd ••••••⟧",
   "account_upgrade_setup": "⟦Sèt ùp àccòùnt •••••⟧",
