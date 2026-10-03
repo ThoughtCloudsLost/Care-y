@@ -58,6 +58,57 @@ const ALWAYS_ACCENTED = [
   "linea", // línea
   "ingles", // inglés
   "espanol", // español
+  "estan", // están
+  "actua", // actúa
+  "admision", // admisión
+  "analisis", // análisis
+  "apareceran", // aparecerán
+  "asesoria", // asesoría
+  "boton", // botón
+  "cajon", // cajón
+  "clausulas", // cláusulas
+  "confias", // confías
+  "cronologia", // cronología
+  "dano", // daño
+  "deberia", // debería
+  "demas", // demás
+  "desplazate", // desplázate
+  "digito", // dígito
+  "distribuira", // distribuirá
+  "dividiran", // dividirán
+  "enganada", // engañada
+  "envia", // envía
+  "envian", // envían
+  "envias", // envías
+  "estara", // estará
+  "exportacion", // exportación
+  "fisica", // física
+  "fisicas", // físicas
+  "guia", // guía
+  "guias", // guías
+  "incluiran", // incluirán
+  "leera", // leerá
+  "llamanos", // llámanos
+  "manana", // mañana
+  "mayoria", // mayoría
+  "metodo", // método
+  "minimo", // mínimo
+  "moveran", // moverán
+  "paises", // países
+  "pestanas", // pestañas
+  "podran", // podrán
+  "politica", // política
+  "proximos", // próximos
+  "sabra", // sabrá
+  "sintesis", // síntesis
+  "tecnico", // técnico
+  "telefonica", // telefónica
+  "telefonicas", // telefónicas
+  "traves", // través
+  "ultimos", // últimos
+  "vacio", // vacío
+  "via", // vía
+  "volveran", // volverán
 ] as const;
 
 /**
