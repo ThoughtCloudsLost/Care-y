@@ -3,14 +3,31 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getErrorMessage } from "./query-error-messages.js";
 
-  let { error, onretry }: { error: unknown; onretry?: () => void } = $props();
+  let {
+    error,
+    onretry,
+    message,
+    action,
+  }: {
+    error: unknown;
+    onretry?: () => void;
+    /** Shown in place of the message mapped from the error code. */
+    message?: string;
+    /** Secondary action, such as a way back to the list. */
+    action?: { label: string; onclick: () => void };
+  } = $props();
 </script>
 
 <Block class="text-center py-8">
-  <p class="query-error-message">{getErrorMessage(error)}</p>
+  <p class="query-error-message">{message ?? getErrorMessage(error)}</p>
   {#if onretry}
     <button class="touch-feedback query-error-retry" onclick={onretry}>
       {m.app_retry()}
+    </button>
+  {/if}
+  {#if action}
+    <button class="touch-feedback query-error-action" onclick={action.onclick}>
+      {action.label}
     </button>
   {/if}
 </Block>
@@ -20,7 +37,8 @@
     color: var(--muted);
   }
 
-  .query-error-retry {
+  .query-error-retry,
+  .query-error-action {
     margin-top: 1rem;
   }
 </style>
