@@ -190,4 +190,20 @@ describe("FirstLoginPage", () => {
     const button = screen.getByText(m.onboarding_firstlogin_submit());
     expect(button.closest("button")?.hasAttribute("disabled")).toBe(true);
   });
+
+  it("offers no Back on the briefing after the account is created", () => {
+    storageMap.set(
+      "care-y-firstlogin-wizard",
+      JSON.stringify({ step: 1, completed: [0] }),
+    );
+    inviteQueryState = {
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      data: { valid: true, expiresAt: "2026-06-01T00:00:00Z" },
+    };
+    render(FirstLoginPage);
+    expect(wizardNavContainer.current?.right).toBeDefined();
+    expect(wizardNavContainer.current?.left).toBeUndefined();
+  });
 });

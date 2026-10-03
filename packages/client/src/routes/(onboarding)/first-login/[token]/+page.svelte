@@ -32,6 +32,10 @@
     clearState,
     resolveRecoveryStep,
   } from "$lib/onboarding/wizard-persistence.js";
+  import {
+    canGoBack,
+    type FirstLoginStepId,
+  } from "$lib/onboarding/completion-steps.js";
   import { getWizardNavCtx } from "$lib/components/onboarding/wizard-nav-context.js";
   import SetupInviteAccount from "$lib/components/onboarding/SetupInviteAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
@@ -46,6 +50,12 @@
     m.onboarding_step_account(),
     m.onboarding_step_briefing(),
     m.onboarding_step_twofa(),
+  ];
+
+  const STEP_IDS: readonly FirstLoginStepId[] = [
+    "account",
+    "briefing",
+    "twofa",
   ];
 
   interface WizardData {
@@ -70,8 +80,12 @@
 
   const onboarding = requireRouter(trpc.onboarding, "onboarding");
 
+  // Account creation spends the invite and is never re-entered, so the
+  // step after it gets no Back, the same as the first step.
+  const backAllowed = $derived(canGoBack(step, STEP_IDS));
+
   function goBack(): void {
-    if (step <= 0) return;
+    if (!backAllowed) return;
     step -= 1;
     saveState(sessionStorage, STORAGE_KEY, step, completedSteps);
     history.pushState({ wizardStep: step }, "");
@@ -238,12 +252,15 @@
   {#if step === 0}
     <SetupInviteAccount {token} oncomplete={handleAccountComplete} />
   {:else if step === 1}
-    <SecurityBriefing onconfirm={handleBriefingConfirm} {goBack} />
+    <SecurityBriefing
+      onconfirm={handleBriefingConfirm}
+      goBack={backAllowed ? goBack : undefined}
+    />
   {:else if step === 2}
     <SetupTwoFactor
       oncomplete={handleTwofaComplete}
       username={wizardData.identifier ?? ""}
-      {goBack}
+      goBack={backAllowed ? goBack : undefined}
     />
   {/if}
 {/if}
