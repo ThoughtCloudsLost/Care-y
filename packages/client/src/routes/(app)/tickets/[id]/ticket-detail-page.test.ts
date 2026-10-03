@@ -336,13 +336,16 @@ vi.mock(
 );
 
 const mockExecuteCall = vi.fn();
+let mockCallInProgress = false;
 
 vi.mock(
   "$lib/composables/ticket-detail/create-call-dispatch.svelte.js",
   async (importOriginal) => ({
     ...(await importOriginal<typeof CallDispatchModule>()),
     createCallDispatch: () => ({
-      inProgress: false,
+      get inProgress(): boolean {
+        return mockCallInProgress;
+      },
       executeCall: mockExecuteCall,
     }),
   }),
@@ -472,6 +475,7 @@ beforeEach(() => {
   mockTabbarHidden.current = false;
   mockNavbarCtx.current = undefined;
   mockExecuteCall.mockClear();
+  mockCallInProgress = false;
   mockHintShow = undefined;
   capturedPanelDeps = undefined;
   _resetSessionShown();
@@ -610,5 +614,22 @@ describe("Ticket detail route page", () => {
 
     expect(mockExecuteCall).toHaveBeenCalledTimes(1);
     expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not raise the call exposure notice when the sheet opens during a call in progress", async () => {
+    mockCallInProgress = true;
+    render(PageModule.default);
+
+    const deps = capturedPanelDeps;
+    expect(deps).toBeDefined();
+    if (deps === undefined) return;
+    deps.oncall();
+    await tick();
+
+    const show = mockHintShow;
+    expect(show).toBeDefined();
+    if (show === undefined) return;
+    expect(show).not.toHaveBeenCalled();
+    expect(mockExecuteCall).not.toHaveBeenCalled();
   });
 });

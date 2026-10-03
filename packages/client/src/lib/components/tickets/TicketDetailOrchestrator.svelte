@@ -1021,7 +1021,8 @@
   }
 
   function openCallSheet(): void {
-    exposureHint.show("call");
+    // The notice shows once per session, so raise it only when the sheet can actually place a call.
+    if (!callInProgress) exposureHint.show("call");
     callSheetOpen = true;
   }
   function closeCallSheet(): void {
