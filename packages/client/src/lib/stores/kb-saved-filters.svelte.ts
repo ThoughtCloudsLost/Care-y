@@ -8,6 +8,11 @@
  * serialized as JSON, validated by kbSavedFilterStateSchema.
  *
  * localStorage key: "care-y:kb-saved-filters"
+ *
+ * A failed localStorage write never passes silently: `add` throws
+ * SavedFilterStorageError and leaves the list unchanged, remove and
+ * toggleShare roll back and raise a toast, and reseal keeps the resealed
+ * names for the session and raises a toast.
  */
 
 import {
@@ -17,6 +22,9 @@ import {
 } from "@care-y/shared";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { resealSavedFilterNames } from "./saved-filter-reseal.js";
+import { SavedFilterStorageError } from "$lib/errors.js";
+import { toastStore } from "$lib/stores/toast.svelte.js";
+import * as m from "$lib/paraglide/messages.js";
 
 export type { KbSavedFilterState } from "@care-y/shared";
 
@@ -49,16 +57,20 @@ function loadFromStorage(): SavedFilterRecord[] {
   }
 }
 
-function saveToStorage(records: SavedFilterRecord[]): void {
+/** Write the private filters. Returns false when storage refuses the write. */
+function saveToStorage(records: SavedFilterRecord[]): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    return true;
   } catch {
-    // localStorage full or unavailable
+    // Storage full or unavailable (private browsing). Callers report it.
+    return false;
   }
 }
 
 function createKbSavedFilterStore(): {
   readonly filters: SavedFilterRecord[];
+  /** Add a private filter. Throws SavedFilterStorageError, leaving the list unchanged, when the write fails. */
   add(record: SavedFilterRecord): void;
   remove(id: string): void;
   toggleShare(id: string): void;
@@ -67,37 +79,46 @@ function createKbSavedFilterStore(): {
 } {
   let filters = $state(loadFromStorage());
 
-  function persist(): void {
-    saveToStorage(filters);
-  }
-
   return {
     get filters(): SavedFilterRecord[] {
       return filters;
     },
 
     add(record: SavedFilterRecord): void {
-      filters = [record, ...filters];
-      persist();
+      const next = [record, ...filters];
+      if (!saveToStorage(next)) throw new SavedFilterStorageError();
+      filters = next;
     },
 
     remove(id: string): void {
-      filters = filters.filter((f) => f.id !== id);
-      persist();
+      const next = filters.filter((f) => f.id !== id);
+      if (!saveToStorage(next)) {
+        toastStore.show(m.saved_filter_delete_failed());
+        return;
+      }
+      filters = next;
     },
 
     toggleShare(id: string): void {
-      filters = filters.map((f) =>
+      const next = filters.map((f) =>
         f.id === id ? { ...f, shared: !f.shared } : f,
       );
-      persist();
+      if (!saveToStorage(next)) {
+        toastStore.show(m.saved_filter_save_failed());
+        return;
+      }
+      filters = next;
     },
 
     async resealNames(bridge: CryptoBridge): Promise<void> {
       const updated = await resealSavedFilterNames(bridge, filters);
       if (updated !== null) {
+        // Correct for this session; the next session reseals the old
+        // names again.
         filters = updated;
-        persist();
+        if (!saveToStorage(filters)) {
+          toastStore.show(m.saved_filter_save_failed());
+        }
       }
     },
 

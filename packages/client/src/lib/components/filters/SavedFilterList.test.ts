@@ -7,7 +7,8 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { tick } from "svelte";
 
 // IntersectionObserver is not available in jsdom (needed by DecryptPlaceholder)
 vi.stubGlobal(
@@ -35,6 +36,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   shell_close: () => "Close",
   error_decryption_failed: () => "Decryption failed",
   decrypt_placeholder_loading: () => "Decrypting",
+  saved_filter_shared_load_failed: () => "Shared filters could not be loaded.",
+  common_retry: () => "Retry",
 }));
 
 // --- Mock crypto context ---
@@ -180,5 +183,111 @@ describe("SavedFilterList", () => {
     });
     const list = screen.queryByRole("list");
     expect(list).toBeNull();
+  });
+
+  const othersFilter: SavedFilterRecord = {
+    id: "sf-3",
+    encryptedName: "CQoLDA==",
+    color: "green",
+    icon: "star",
+    state: JSON.stringify({ statuses: ["closed"] }),
+    shared: true,
+    ownerId: "user-2",
+    createdAt: new Date().toISOString(),
+  };
+
+  it("opens the action sheet on contextmenu for an owned chip", async () => {
+    render(SavedFilterList, {
+      filters: [mockFilters[0]!],
+      count: 1,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
+    });
+    const chip = screen.getByRole("button", { name: "My Housing Filter" });
+
+    await fireEvent.contextMenu(chip);
+
+    expect(screen.queryByText("Delete")).not.toBeNull();
+  });
+
+  it("does not open the action sheet on contextmenu for another owner's chip", async () => {
+    render(SavedFilterList, {
+      filters: [othersFilter],
+      count: 1,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
+    });
+    const chip = screen.getByRole("button", { name: "My Housing Filter" });
+
+    await fireEvent.contextMenu(chip);
+
+    expect(screen.queryByText("Delete")).toBeNull();
+    expect(screen.queryByText("Share")).toBeNull();
+    expect(screen.queryByText("Unshare")).toBeNull();
+    expect(screen.queryByText("Close")).toBeNull();
+  });
+
+  it("long press on another owner's chip neither opens the sheet nor applies", async () => {
+    const onapply = vi.fn();
+    render(SavedFilterList, {
+      filters: [othersFilter],
+      count: 1,
+      onapply,
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
+    });
+    const chip = screen.getByRole("button", { name: "My Housing Filter" });
+
+    vi.useFakeTimers();
+    try {
+      chip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      vi.advanceTimersByTime(500);
+      chip.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      await tick();
+
+      expect(screen.queryByText("Close")).toBeNull();
+      expect(onapply).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a retryable alert when shared filters failed to load", async () => {
+    const onretryshared = vi.fn();
+    render(SavedFilterList, {
+      filters: [],
+      count: 0,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
+      sharedLoadFailed: true,
+      onretryshared,
+    });
+
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("Shared filters could not be loaded.");
+
+    await fireEvent.click(screen.getByText("Retry"));
+
+    expect(onretryshared).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders no alert when sharedLoadFailed is omitted", () => {
+    render(SavedFilterList, {
+      filters: mockFilters,
+      count: 2,
+      onapply: vi.fn(),
+      ondelete: vi.fn(),
+      ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

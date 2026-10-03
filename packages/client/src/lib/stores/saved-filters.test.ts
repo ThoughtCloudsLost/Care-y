@@ -2,6 +2,24 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as ResealNS from "./saved-filter-reseal.js";
+import * as m from "$lib/paraglide/messages.js";
+
+const { mockToastShow, mockReseal } = vi.hoisted(() => ({
+  mockToastShow: vi.fn(),
+  mockReseal: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ToastNS>()),
+  toastStore: { show: mockToastShow, dismiss: vi.fn(), current: null },
+}));
+
+vi.mock("./saved-filter-reseal.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ResealNS>()),
+  resealSavedFilterNames: mockReseal,
+}));
 
 // Mock trpc before importing the store.
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
@@ -31,11 +49,51 @@ describe("savedFilterStore", () => {
   beforeEach(() => {
     vi.resetModules();
     localStorage.clear();
+    mockToastShow.mockClear();
   });
 
   async function getStore() {
     const { savedFilterStore } = await import("./saved-filters.svelte.ts");
     return savedFilterStore;
+  }
+
+  /** Make every localStorage write throw as a full quota would. */
+  function failStorageWrites() {
+    return vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+  }
+
+  const sharedState = JSON.stringify({
+    statuses: ["closed"],
+    queueIds: [],
+    priorities: [],
+    assigneeId: null,
+    dateFrom: null,
+    dateTo: null,
+    sortField: "date",
+    sortDirection: "asc",
+  });
+
+  function makeOrgKeyMgr() {
+    return {
+      isLoaded: true,
+      encryptText: vi.fn().mockResolvedValue("ZW5j"),
+      decryptText: vi.fn().mockResolvedValue(sharedState),
+    };
+  }
+
+  function makeServerFilter(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "server-1",
+      ownerId: "user-1",
+      encryptedName: "c2hhcmVk",
+      encryptedState: "c2hhcmVk",
+      color: "red",
+      icon: "star",
+      createdAt: new Date().toISOString(),
+      ...overrides,
+    };
   }
 
   function makeSavedFilter(overrides: Record<string, unknown> = {}) {
@@ -245,6 +303,192 @@ describe("savedFilterStore", () => {
       expect(store.filters[0]?.id).toBe("local-1");
       expect(store.filters[1]?.id).toBe("server-1");
       expect(store.filters[1]?.shared).toBe(true);
+    });
+  });
+
+  describe("failed storage writes", () => {
+    it("add throws SavedFilterStorageError and leaves the list empty", async () => {
+      const store = await getStore();
+      const { SavedFilterStorageError } = await import("$lib/errors.js");
+      const setItem = failStorageWrites();
+      try {
+        expect(() => {
+          store.add(makeSavedFilter());
+        }).toThrow(SavedFilterStorageError);
+        expect(store.count).toBe(0);
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("a failed add leaves the previously added filter listed", async () => {
+      const store = await getStore();
+      const { SavedFilterStorageError } = await import("$lib/errors.js");
+      const existing = makeSavedFilter();
+      store.add(existing);
+      const setItem = failStorageWrites();
+      try {
+        expect(() => {
+          store.add(makeSavedFilter());
+        }).toThrow(SavedFilterStorageError);
+        expect(store.count).toBe(1);
+        expect(store.filters[0]?.id).toBe(existing.id);
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("remove of a local filter rolls back and raises a toast", async () => {
+      const store = await getStore();
+      const record = makeSavedFilter();
+      store.add(record);
+      const setItem = failStorageWrites();
+      try {
+        store.remove(record.id);
+        expect(store.count).toBe(1);
+        expect(store.filters[0]?.id).toBe(record.id);
+        expect(mockToastShow).toHaveBeenCalledWith(
+          m.saved_filter_delete_failed(),
+        );
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("share keeps the server record and raises a toast", async () => {
+      const store = await getStore();
+      const { trpc } = await import("$lib/trpc/index.js");
+      store.setContext("user-1", makeOrgKeyMgr() as never);
+      const record = makeSavedFilter({ ownerId: "user-1" });
+      store.add(record);
+      const setItem = failStorageWrites();
+      try {
+        store.toggleShare(record.id);
+        await vi.waitFor(() => {
+          expect(trpc.savedFilters!.share.mutate).toHaveBeenCalled();
+          expect(store.filters.map((f) => f.id)).toEqual(["server-id-1"]);
+          expect(store.filters[0]?.shared).toBe(true);
+          expect(mockToastShow).toHaveBeenCalledWith(
+            m.saved_filter_save_failed(),
+          );
+        });
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("unshare keeps the private copy and raises a toast", async () => {
+      const store = await getStore();
+      const { trpc } = await import("$lib/trpc/index.js");
+      const mgr = makeOrgKeyMgr();
+      vi.mocked(trpc.savedFilters!.list.query).mockResolvedValueOnce({
+        filters: [makeServerFilter({ id: "server-1", ownerId: "user-1" })],
+      });
+      await store.loadShared(mgr as never);
+      store.setContext("user-1", mgr as never);
+      const setItem = failStorageWrites();
+      try {
+        store.toggleShare("server-1");
+        await vi.waitFor(() => {
+          expect(trpc.savedFilters!.unshare.mutate).toHaveBeenCalledWith({
+            filterId: "server-1",
+          });
+          expect(store.count).toBe(1);
+          expect(store.filters[0]?.shared).toBe(false);
+          expect(mockToastShow).toHaveBeenCalledWith(
+            m.saved_filter_save_failed(),
+          );
+        });
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("resealNames keeps the resealed names and raises a toast", async () => {
+      const store = await getStore();
+      const record = makeSavedFilter();
+      store.add(record);
+      mockReseal.mockResolvedValueOnce([{ ...record, encryptedName: "bmV3" }]);
+      const setItem = failStorageWrites();
+      try {
+        await store.resealNames({} as never);
+        expect(store.filters[0]?.encryptedName).toBe("bmV3");
+        expect(mockToastShow).toHaveBeenCalledWith(
+          m.saved_filter_save_failed(),
+        );
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+  });
+
+  describe("loadShared failures", () => {
+    it("FORBIDDEN leaves the shared section absent without a failure", async () => {
+      const store = await getStore();
+      const { trpc } = await import("$lib/trpc/index.js");
+      const { TRPCClientError } = await import("@trpc/client");
+      vi.mocked(trpc.savedFilters!.list.query).mockRejectedValueOnce(
+        TRPCClientError.from({
+          error: {
+            message: "forbidden",
+            code: -32003,
+            data: { code: "FORBIDDEN" },
+          },
+        }),
+      );
+
+      await store.loadShared(makeOrgKeyMgr() as never);
+
+      expect(store.sharedLoadFailed).toBe(false);
+      expect(store.count).toBe(0);
+    });
+
+    it("a network failure is flagged and retryShared clears it", async () => {
+      const store = await getStore();
+      const { trpc } = await import("$lib/trpc/index.js");
+      vi.mocked(trpc.savedFilters!.list.query).mockRejectedValueOnce(
+        new TypeError("Failed to fetch"),
+      );
+
+      await store.loadShared(makeOrgKeyMgr() as never);
+      expect(store.sharedLoadFailed).toBe(true);
+
+      vi.mocked(trpc.savedFilters!.list.query).mockResolvedValueOnce({
+        filters: [makeServerFilter({ id: "server-1", ownerId: "user-2" })],
+      });
+      await store.retryShared();
+
+      expect(store.sharedLoadFailed).toBe(false);
+      expect(store.filters.map((f) => f.id)).toEqual(["server-1"]);
+    });
+
+    it("skips a filter whose state cannot be decrypted", async () => {
+      const store = await getStore();
+      const { trpc } = await import("$lib/trpc/index.js");
+      vi.mocked(trpc.savedFilters!.list.query).mockResolvedValueOnce({
+        filters: [
+          makeServerFilter({ id: "server-1" }),
+          makeServerFilter({ id: "server-2" }),
+        ],
+      });
+      const mgr = makeOrgKeyMgr();
+      mgr.decryptText.mockRejectedValueOnce(new Error("cannot decrypt"));
+
+      await store.loadShared(mgr as never);
+
+      expect(store.filters.map((f) => f.id)).toEqual(["server-2"]);
+      expect(store.sharedLoadFailed).toBe(false);
+    });
+
+    it("retryShared without a prior loadShared does not query", async () => {
+      const store = await getStore();
+      const { trpc } = await import("$lib/trpc/index.js");
+      const query = vi.mocked(trpc.savedFilters!.list.query);
+      const callsBefore = query.mock.calls.length;
+
+      await store.retryShared();
+
+      expect(query.mock.calls.length).toBe(callsBefore);
     });
   });
 });

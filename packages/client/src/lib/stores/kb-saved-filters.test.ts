@@ -1,15 +1,42 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as ResealNS from "./saved-filter-reseal.js";
+import * as m from "$lib/paraglide/messages.js";
+
+const { mockToastShow, mockReseal } = vi.hoisted(() => ({
+  mockToastShow: vi.fn(),
+  mockReseal: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ToastNS>()),
+  toastStore: { show: mockToastShow, dismiss: vi.fn(), current: null },
+}));
+
+vi.mock("./saved-filter-reseal.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ResealNS>()),
+  resealSavedFilterNames: mockReseal,
+}));
+
 describe("kbSavedFilterStore", () => {
   beforeEach(() => {
     vi.resetModules();
     localStorage.clear();
+    mockToastShow.mockClear();
   });
 
   async function getStore() {
     const { kbSavedFilterStore } = await import("./kb-saved-filters.svelte.ts");
     return kbSavedFilterStore;
+  }
+
+  /** Make every localStorage write throw as a full quota would. */
+  function failStorageWrites() {
+    return vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
   }
 
   function makeKbSavedFilter(overrides: Record<string, unknown> = {}) {
@@ -197,6 +224,75 @@ describe("kbSavedFilterStore", () => {
       expect(state.categoryIds).toEqual(["cat-1"]);
       expect(state.minRating).toBe(0.3);
       expect(state.sortField).toBe("created_at");
+    });
+  });
+
+  describe("failed storage writes", () => {
+    it("add throws SavedFilterStorageError and leaves the list unchanged", async () => {
+      const store = await getStore();
+      const { SavedFilterStorageError } = await import("$lib/errors.js");
+      const existing = makeKbSavedFilter();
+      store.add(existing);
+      const setItem = failStorageWrites();
+      try {
+        expect(() => {
+          store.add(makeKbSavedFilter());
+        }).toThrow(SavedFilterStorageError);
+        expect(store.count).toBe(1);
+        expect(store.filters[0]?.id).toBe(existing.id);
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("remove rolls back and raises a toast", async () => {
+      const store = await getStore();
+      const record = makeKbSavedFilter();
+      store.add(record);
+      const setItem = failStorageWrites();
+      try {
+        store.remove(record.id);
+        expect(store.count).toBe(1);
+        expect(store.filters[0]?.id).toBe(record.id);
+        expect(mockToastShow).toHaveBeenCalledWith(
+          m.saved_filter_delete_failed(),
+        );
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("toggleShare rolls back the flag and raises a toast", async () => {
+      const store = await getStore();
+      const record = makeKbSavedFilter({ shared: false });
+      store.add(record);
+      const setItem = failStorageWrites();
+      try {
+        store.toggleShare(record.id);
+        expect(store.filters[0]?.shared).toBe(false);
+        expect(mockToastShow).toHaveBeenCalledWith(
+          m.saved_filter_save_failed(),
+        );
+      } finally {
+        setItem.mockRestore();
+      }
+    });
+
+    it("resealNames keeps the resealed names and raises a toast", async () => {
+      const store = await getStore();
+      const record = makeKbSavedFilter();
+      store.add(record);
+      mockReseal.mockResolvedValueOnce([{ ...record, encryptedName: "bmV3" }]);
+      const setItem = failStorageWrites();
+      try {
+        await store.resealNames({} as never);
+        expect(store.filters[0]?.encryptedName).toBe("bmV3");
+        expect(mockToastShow).toHaveBeenCalledWith(
+          m.saved_filter_save_failed(),
+        );
+      } finally {
+        setItem.mockRestore();
+      }
     });
   });
 });

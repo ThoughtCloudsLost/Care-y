@@ -1086,6 +1086,8 @@
     ondelete: dispatch.handleSavedFilterDelete,
     ontoggleshare: dispatch.handleSavedFilterToggleShare,
     currentUserId: currentUserId ?? null,
+    sharedLoadFailed: savedFilterStore.sharedLoadFailed,
+    onretryshared: () => void savedFilterStore.retryShared(),
   });
 
   const filterPillsConfig: FilterPillsConfig = $derived({
