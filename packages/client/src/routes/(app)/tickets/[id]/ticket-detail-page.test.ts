@@ -3,11 +3,14 @@
  * Ticket detail route page tests.
  *
  * Verifies route-level wiring (tabbar hidden, navbar override, overlay
- * management, snapshot capture/restore, navbar element accessibility).
+ * management, snapshot capture/restore, navbar element accessibility,
+ * call exposure notice timing).
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import type { Mock } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { tick } from "svelte";
 import type * as ErrorsModule from "$lib/errors.js";
 import type * as SvelteQueryModule from "@tanstack/svelte-query";
 import type * as TrpcModule from "$lib/trpc/index.js";
@@ -17,6 +20,14 @@ import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as SendMessageModule from "$lib/composables/ticket-detail/create-send-message.svelte.js";
 import type * as SmsSendModule from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
 import type * as CallDispatchModule from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
+import type * as ExposureHintModule from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
+import type * as PanelActionsModule from "$lib/composables/ticket-detail/create-panel-actions.svelte.js";
+import type {
+  ExposureHintState,
+  ExposureHintType,
+} from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
+import type { PanelActionsDeps } from "$lib/composables/ticket-detail/create-panel-actions.svelte.js";
+import { _resetSessionShown } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
 import type * as AppStateNS from "$app/state";
 import type * as AppNavigationNS from "$app/navigation";
 import type * as AppPathsNS from "$app/paths";
@@ -323,15 +334,74 @@ vi.mock(
     createSmsSend: () => ({ sending: false, handleSmsSend: vi.fn() }),
   }),
 );
+
+const mockExecuteCall = vi.fn();
+let mockCallInProgress = false;
+
 vi.mock(
   "$lib/composables/ticket-detail/create-call-dispatch.svelte.js",
   async (importOriginal) => ({
     ...(await importOriginal<typeof CallDispatchModule>()),
     createCallDispatch: () => ({
-      inProgress: false,
-      executeCall: vi.fn(),
+      get inProgress(): boolean {
+        return mockCallInProgress;
+      },
+      executeCall: mockExecuteCall,
     }),
   }),
+);
+
+// Wraps the real exposure hint so its state still drives the notice, while
+// the spy records when the orchestrator raises it.
+let mockHintShow: Mock<(type: ExposureHintType) => void> | undefined;
+
+vi.mock(
+  "$lib/composables/ticket-detail/create-exposure-hint.svelte.js",
+  async (importOriginal) => {
+    const original = await importOriginal<typeof ExposureHintModule>();
+    return {
+      ...original,
+      createExposureHint: (): ExposureHintState => {
+        const realHint = original.createExposureHint();
+        const show = vi.fn((type: ExposureHintType): void => {
+          realHint.show(type);
+        });
+        mockHintShow = show;
+        return {
+          get type(): ExposureHintType | null {
+            return realHint.type;
+          },
+          get open(): boolean {
+            return realHint.open;
+          },
+          show,
+          dismiss: (): void => {
+            realHint.dismiss();
+          },
+        };
+      },
+    };
+  },
+);
+
+// Captures the panel action callbacks so a test can trigger the panel's
+// call action without opening the panel popup.
+let capturedPanelDeps: PanelActionsDeps | undefined;
+
+vi.mock(
+  "$lib/composables/ticket-detail/create-panel-actions.svelte.js",
+  async (importOriginal) => {
+    const original = await importOriginal<typeof PanelActionsModule>();
+    return {
+      ...original,
+      createPanelActions: (
+        deps: PanelActionsDeps,
+      ): ReturnType<typeof original.createPanelActions> => {
+        capturedPanelDeps = deps;
+        return original.createPanelActions(deps);
+      },
+    };
+  },
 );
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
@@ -404,6 +474,11 @@ beforeEach(() => {
   );
   mockTabbarHidden.current = false;
   mockNavbarCtx.current = undefined;
+  mockExecuteCall.mockClear();
+  mockCallInProgress = false;
+  mockHintShow = undefined;
+  capturedPanelDeps = undefined;
+  _resetSessionShown();
 
   ticketQueryState = {
     isLoading: false,
@@ -515,5 +590,46 @@ describe("Ticket detail route page", () => {
     // The chat log should render (ticket data is present).
     const log = container.querySelector("[role='log']");
     expect(log).not.toBeNull();
+  });
+
+  it("raises the call exposure notice when the call sheet opens, before the call is placed", async () => {
+    render(PageModule.default);
+
+    const deps = capturedPanelDeps;
+    expect(deps).toBeDefined();
+    if (deps === undefined) return;
+    deps.oncall();
+    await tick();
+
+    const show = mockHintShow;
+    expect(show).toBeDefined();
+    if (show === undefined) return;
+    expect(show).toHaveBeenCalledWith("call");
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(mockExecuteCall).not.toHaveBeenCalled();
+
+    const browserLabel = screen.getByText("Call via browser");
+    await fireEvent.click(browserLabel.closest("button") ?? browserLabel);
+    await tick();
+
+    expect(mockExecuteCall).toHaveBeenCalledTimes(1);
+    expect(show).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not raise the call exposure notice when the sheet opens during a call in progress", async () => {
+    mockCallInProgress = true;
+    render(PageModule.default);
+
+    const deps = capturedPanelDeps;
+    expect(deps).toBeDefined();
+    if (deps === undefined) return;
+    deps.oncall();
+    await tick();
+
+    const show = mockHintShow;
+    expect(show).toBeDefined();
+    if (show === undefined) return;
+    expect(show).not.toHaveBeenCalled();
+    expect(mockExecuteCall).not.toHaveBeenCalled();
   });
 });

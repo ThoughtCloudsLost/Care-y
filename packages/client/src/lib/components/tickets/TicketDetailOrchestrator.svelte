@@ -906,8 +906,6 @@
   function handleCallAction(action: CallAction): void {
     closeCallSheet();
     if (action === "cancel" || callInProgress) return;
-
-    exposureHint.show("call");
     void callDispatch.executeCall();
   }
 
@@ -1023,6 +1021,8 @@
   }
 
   function openCallSheet(): void {
+    // The notice shows once per session, so raise it only when the sheet can actually place a call.
+    if (!callInProgress) exposureHint.show("call");
     callSheetOpen = true;
   }
   function closeCallSheet(): void {
