@@ -387,14 +387,22 @@ export async function getQuarantineBlob(
  * ConflictError and writes nothing. A second update fills the routed
  * ticket and follow-up ids once the follow-up exists.
  *
- * If the ticket resolution or the follow-up write fails, the claim is
- * released and the row returns to pending, so the voicemail stays in
- * the quarantine queue. A pending client token is consumed only after
- * the follow-up and the fill-in update succeed, so a failed attempt can
- * be retried with the same token. A failed fill-in update does not
- * release the claim, because the follow-up already exists and a retry
- * would add a second one. The sealed quarantine blob is deleted only
- * after the follow-up exists.
+ * An audio payload over the maximum size is refused before the row is
+ * read, so it writes nothing. If the ticket resolution or the follow-up
+ * write fails, the claim is released and the row returns to pending, so
+ * the voicemail stays in the quarantine queue. The follow-up write is
+ * itself several writes (blob store, key wraps, follow-up row, recording
+ * row) with no transaction around them, so a failure late in that write
+ * can leave a follow-up on the ticket after the claim is released, and a
+ * retry can then add a second one. Making the follow-up write
+ * transactional is a separate change. If releasing the claim fails, the
+ * original failure is rethrown with the release failure attached as its
+ * cause, unless it already carries one. A pending client token is
+ * consumed only after the follow-up and the fill-in update succeed, so a
+ * failed attempt can be retried with the same token. A failed fill-in
+ * update does not release the claim, because the follow-up already exists
+ * and a retry would add a second one. The sealed quarantine blob is
+ * deleted only after the follow-up exists.
  */
 export async function routeQuarantined(
   deps: RouteQuarantineDeps,
@@ -402,6 +410,19 @@ export async function routeQuarantined(
   actorId: UserId,
 ): Promise<RouteQuarantineResult> {
   const { tDb, blobStore, pendingClients } = deps;
+
+  // Refuse an oversized payload before any read or write. Buffer.byteLength
+  // computes the decoded size without allocating the plaintext audio. The
+  // Node Buffer.byteLength docs note that for base64 it assumes valid input
+  // and can overestimate for strings containing whitespace, so this check
+  // can only refuse early, never admit an oversized payload. The check after
+  // decoding in writeRoutedFollowUp stays the authoritative one.
+  if (
+    Buffer.byteLength(input.audioData, "base64") >
+    VOICEMAIL_QUARANTINE_MAX_BYTES
+  ) {
+    throw new ValidationError("Decoded audio exceeds maximum allowed size");
+  }
 
   // Load the quarantine row
   const row = await tDb
@@ -439,7 +460,15 @@ export async function routeQuarantined(
     ticketId = await resolveRouteTicket(deps, input.target);
     followUpId = await writeRoutedFollowUp(deps, input, ticketId);
   } catch (err) {
-    await releaseQuarantineClaim(tDb, input.quarantineId, actorId);
+    try {
+      await releaseQuarantineClaim(tDb, input.quarantineId, actorId);
+    } catch (releaseErr) {
+      // Keep the original failure as the one the caller sees, carrying the
+      // release failure as its cause when it has none of its own.
+      if (err instanceof Error && err.cause === undefined) {
+        err.cause = releaseErr;
+      }
+    }
     throw err;
   }
 
