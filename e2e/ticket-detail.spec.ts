@@ -373,11 +373,21 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // on a portal-capable ticket. No seed gives the story ticket a channel
     // and the portal specs reset every client's tier, so set the link up
     // here, the way the portal spec does for its own ticket.
+    // On a retry of this serial group, or a second run against one seed,
+    // the link from the first attempt is still there and the setup button
+    // never renders, so only create it when the client is still fresh.
     await openTicketInfoPanel(page, "Communication");
-    await createSecureLink(page);
-    await expect(
-      page.getByRole("button", { name: /set up secure link/i }),
-    ).toHaveCount(0, { timeout: CRYPTO_TIMEOUT });
+    const setupBtn = page
+      .getByRole("button", { name: /set up secure link/i })
+      .first();
+    const isFresh = await setupBtn
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (isFresh) {
+      await createSecureLink(page);
+      await expect(setupBtn).toHaveCount(0, { timeout: CRYPTO_TIMEOUT });
+    }
 
     const dialog = await openComposeActions(page);
     await expect(dialog.getByText(/preset replies/i)).toBeVisible({

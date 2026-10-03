@@ -10,7 +10,6 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
 
 const COMPOSE = "docker compose";
 const E2E_ORG_SLUG = "e2e-org";
@@ -74,45 +73,15 @@ export function countRows(table: string, where?: string): number {
  * cannot be targeted from SQL; the org-wide reset is safe because every
  * spec that needs a channel creates its own.
  */
-/*
- * The seed stamp lives at /tmp/care-y-e2e-org-seed-stamp: written by the
- * seed-data project once the replay has finished, read here so the reset
- * leaves the seed's own rows alone. The path is spelled out at each call
- * because the lint's filesystem rule wants a literal.
- */
-
-/**
- * Undo the secure-link and account upgrades that specs (or an earlier
- * browser project) performed, so "Set up secure link" renders again for
- * the clients those specs use.
- *
- * Only rows created after the seed stamp go: the seed replay gives the
- * story ticket a live channel that later specs depend on (the compose
- * popover offers preset replies only on a portal-capable ticket), and a
- * blanket reset took that with it. A client keeps its tier while it still
- * holds a channel or an account; everyone else goes back to sms_email.
- * Without a stamp (a spec run alone against an old database) the reset
- * falls back to clearing everything.
- */
 export function resetCommunicationTiers(): void {
-  const stamp = existsSync("/tmp/care-y-e2e-org-seed-stamp")
-    ? readFileSync("/tmp/care-y-e2e-org-seed-stamp", "utf8").trim()
-    : null;
-  const since = stamp === null ? "" : ` WHERE created_at > '${stamp}'`;
-  const messageScope =
-    stamp === null
-      ? ""
-      : ` WHERE channel_id IN (SELECT id FROM portal_channels WHERE created_at > '${stamp}')`;
   queryDb(
     [
-      `DELETE FROM portal_messages${messageScope};`,
-      `DELETE FROM portal_channels${since};`,
-      `DELETE FROM client_accounts${since};`,
-      `DELETE FROM share_links${since};`,
+      "DELETE FROM portal_messages;",
+      "DELETE FROM portal_channels;",
+      "DELETE FROM client_accounts;",
+      "DELETE FROM share_links;",
       "UPDATE clients SET communication_tier = 'sms_email'",
-      "  WHERE communication_tier <> 'sms_email'",
-      "  AND id NOT IN (SELECT client_id FROM portal_channels",
-      "                 UNION SELECT client_id FROM client_accounts);",
+      "  WHERE communication_tier <> 'sms_email';",
     ].join("\n"),
   );
 }

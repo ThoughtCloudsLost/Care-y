@@ -672,10 +672,10 @@ test.describe.serial("Intake validation matrix", () => {
     // list items; the visible text is the click target.
     await page.getByText("Housing", { exact: true }).click();
     // Required fields render with a trailing asterisk ("... *"), so the
-    // consent row needs a substring match; the issue summary from the
-    // earlier empty Next repeats the label too, so take the row itself,
-    // which comes first in the page.
-    await page.getByText(LABELS.consent).first().click();
+    // consent row needs a substring match. The issue summary repeats the
+    // label in a plain list, so the click goes to the row's own label
+    // element rather than to whichever text node comes first.
+    await page.locator("label").filter({ hasText: LABELS.consent }).click();
     await page.getByLabel(LABELS.date).fill("2026-01-15");
     await page.getByLabel(LABELS.message).fill("Validation matrix message");
 

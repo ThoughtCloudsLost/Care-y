@@ -70,7 +70,9 @@ test.describe.serial("Encrypted Account Portal", () => {
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
-    suiteStartedAt = new Date().toISOString();
+    // The database's own clock, so the comparison below never depends on
+    // the host and the container agreeing on the time.
+    suiteStartedAt = queryDb("SELECT now();");
     // All browser projects share one org: an earlier project's run left
     // the upgrade-half client (UPGRADE_TICKET_TITLE's) upgraded, and
     // its "Set up secure link" flow needs a fresh SMS/Email client.
@@ -299,6 +301,13 @@ test.describe.serial("Encrypted Account Portal", () => {
     await expect
       .poll(() => countRows("portal_reply_key_wraps"), { timeout: 15_000 })
       .toBe(0);
+    // The scope has to contain this spec's own reply, or the zero below
+    // would be an empty set rather than a converged one.
+    const clientReplies = queryDb(
+      `SELECT count(*) FROM followups
+       WHERE source = 'client' AND created_at >= '${suiteStartedAt}';`,
+    ).trim();
+    expect(Number(clientReplies)).toBeGreaterThan(0);
     const pendingGenerations = queryDb(
       `SELECT count(*) FROM followups
        WHERE source = 'client' AND key_generation IS NOT NULL
