@@ -169,7 +169,7 @@ async function createLockedTicket(
   browser: Browser,
   adminPage: Page,
 ): Promise<void> {
-  const volContext = await browser.newContext();
+  let volContext = await browser.newContext();
   let volContextOpen = true;
   const closeVolContext = async (): Promise<void> => {
     if (!volContextOpen) return;
@@ -177,7 +177,7 @@ async function createLockedTicket(
     await volContext.close();
   };
   try {
-    const volPage = await volContext.newPage();
+    let volPage = await volContext.newPage();
     // An administrator-created account replaces its temporary password at
     // first sign-in. On a fresh database the replay's password is still the
     // temporary one and the wizard asks for a new one; on a database that
@@ -205,23 +205,37 @@ async function createLockedTicket(
     }
     console.log("[e2e-seed] second seed account signed in");
 
-    // A fresh admin session runs the auto-wrap for accounts that have
-    // keys but no org key yet. The volunteer's key gate polls every 5s.
+    // A fresh admin session runs the auto-wrap for accounts that have keys
+    // but no org key yet. On a fresh database that wrap happens within
+    // seconds of the admin's login; on a database that has been through
+    // this before the volunteer is already wrapped and no call is made,
+    // which is what the catch below stands for.
+    const wrapped = adminPage
+      .waitForResponse((r) => r.url().includes("keys.wrapOrgKeyForUser"), {
+        timeout: CRYPTO_TIMEOUT,
+      })
+      .then(() => true)
+      .catch(() => false);
     await login(adminPage);
-    // The shell renders before the org key arrives, and the new-ticket
-    // sheet's phone lookup throws without that key before it sends anything
-    // (orgKeyManager.phoneMatchHash). A queue name is sealed to the org
-    // key, so its plaintext on the volunteer's dashboard is the signal that
-    // the key is loaded, not the tablist.
-    await volPage.locator('[role="tablist"]').waitFor({
-      state: "attached",
-      timeout: CRYPTO_TIMEOUT * 2,
-    });
+    console.log(
+      `[e2e-seed] admin auto-wrap ${(await wrapped) ? "ran" : "had nothing to do"}`,
+    );
+
+    // Only accounts that manage keys poll for an org key that arrives after
+    // sign-in (AppCryptoProvider); a volunteer loads it at sign-in or not at
+    // all. So the volunteer signs in again, in a fresh context, now that the
+    // wrap exists. A queue name is sealed to the org key, so its plaintext on
+    // the dashboard is the proof the key is loaded.
+    await closeVolContext();
+    volContext = await browser.newContext();
+    volContextOpen = true;
+    volPage = await volContext.newPage();
+    await login(volPage, LOCKED_TICKET_VOLUNTEER, REPLACED_VOLUNTEER_PASSWORD);
     await volPage
       .getByText("Crisis")
       .first()
       .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT * 2 });
-    console.log("[e2e-seed] second seed account received the org key");
+    console.log("[e2e-seed] second seed account signed in with the org key");
 
     const adminId = await currentUserId(adminPage);
     const queueId = await crisisQueueId(adminPage);
