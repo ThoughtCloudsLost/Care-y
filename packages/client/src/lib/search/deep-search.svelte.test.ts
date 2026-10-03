@@ -1122,6 +1122,37 @@ describe("createDeepSearch", () => {
       expect(h.ds.status).toBe("idle");
     });
 
+    it("drops a scope rerun's pending trigger when the term changes during loading", async () => {
+      const p = registerFullSearchProvider();
+      p.reset.mockImplementation(() => {
+        p.contentMatchIds.clear();
+      });
+      const h = createHarness({ hasNext: false, scope: { queueIds: ["q1"] } });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.trigger();
+      await settle();
+      p.runs[0]?.finish({ searched: 4, total: 4 });
+      await settle();
+      expect(h.ds.status).toBe("done");
+
+      h.setInitialLoading(true);
+      h.setScope({ queueIds: ["q2"] });
+      await settle();
+      expect(p.runs).toHaveLength(1);
+
+      h.overlay.setTerm("beacon");
+      await settle();
+
+      h.setInitialLoading(false);
+      await settle();
+      await settle();
+
+      expect(p.runs).toHaveLength(1);
+      expect(h.ds.status).toBe("idle");
+    });
+
     it("reruns when the filters change after the run stopped, and keeps carried matches if the rerun stops too", async () => {
       const p = registerFullSearchProvider();
       p.reset.mockImplementation(() => {

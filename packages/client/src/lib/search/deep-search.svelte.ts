@@ -83,6 +83,9 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   );
   let searchTerm = $state<string | null>(null);
   let pendingTrigger = $state(false);
+  // Set when the pending trigger came from a scope rerun rather than a
+  // "Show all" navigation; only a rerun's trigger is dropped on a term change.
+  let pendingFromRerun = false;
   // Snapshot of the last live counts when a run stops, so the incomplete
   // line reports how far it got.
   let stoppedSearched = $state(0);
@@ -169,6 +172,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     // on the zero-match path the auto-trigger starts the run first; a flag
     // left set would start an unprompted run for the next term.
     pendingTrigger = false;
+    pendingFromRerun = false;
     if (phase !== "idle") return;
     const term = options.overlay.term ?? "";
     if (term.length < 2) return;
@@ -248,6 +252,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     phase = "idle";
     runScopeKey = null;
     pendingTrigger = true;
+    pendingFromRerun = true;
   }
 
   // A run covers the filter scope it started with. When the scope changes
@@ -268,6 +273,10 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     if (!options.overlay.active || options.overlay.term !== searchTerm) {
       phase = "idle";
       resetFullSearchForProvider(options.providerId);
+      if (pendingFromRerun) {
+        pendingTrigger = false;
+        pendingFromRerun = false;
+      }
       searchTerm = null;
       runScopeKey = null;
       runToken++;
@@ -290,7 +299,9 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
   });
 
   // Pending trigger ("Show all" navigation, or a rerun after a filter
-  // change): run once the initial data has loaded.
+  // change): run once the initial data has loaded. A rerun's pending
+  // trigger is dropped when the term changes; a navigation's survives
+  // until the data loads.
   $effect(() => {
     if (pendingTrigger && !options.isInitialLoading() && phase === "idle") {
       pendingTrigger = false;
@@ -319,6 +330,7 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
     },
     scheduleFromNavigation(): void {
       pendingTrigger = true;
+      pendingFromRerun = false;
     },
     retry(): void {
       retryStoppedRun();
