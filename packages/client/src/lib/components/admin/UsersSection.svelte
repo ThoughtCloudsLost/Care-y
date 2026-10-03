@@ -545,6 +545,7 @@
   const selectedIds = new SvelteSet<string>();
 
   export function toggleMultiSelect(): void {
+    if (batchPending) return;
     if (multiSelectActive) {
       exitMultiSelect();
     } else {
@@ -561,6 +562,7 @@
   }
 
   function toggleSelection(userId: string): void {
+    if (batchPending) return;
     if (selectedIds.has(userId)) {
       selectedIds.delete(userId);
     } else {
@@ -573,27 +575,74 @@
     selectedIds.clear();
   }
 
-  async function handleBatchDeactivate(): Promise<void> {
+  function exitMultiSelectFromBar(): void {
+    if (batchPending) return;
+    exitMultiSelect();
+  }
+
+  // ── Bulk deactivation ──
+  let batchDialogOpened = $state(false);
+  let batchPending = $state(false);
+  let batchCount = $state(0);
+
+  function openBatchDeactivateDialog(): void {
+    if (selectedIds.size === 0 || batchPending) return;
+    batchCount = selectedIds.size;
+    batchDialogOpened = true;
+  }
+
+  async function confirmBatchDeactivate(): Promise<void> {
+    batchDialogOpened = false;
+    if (batchPending) return;
     const ids = [...selectedIds];
     if (ids.length === 0) return;
+    batchPending = true;
 
     let succeeded = 0;
+    let refused = 0;
 
-    for (const uid of ids) {
-      try {
-        await authRouter.setUserActive.mutate({ userId: uid, isActive: false });
-        succeeded++;
-      } catch {
-        toastStore.show(m.error_generic(), 3000);
-        exitMultiSelect();
-        return;
+    // A refusal does not stop the run. Refused accounts stay selected and
+    // highlighted so the admin can see which ones they were before leaving
+    // select mode.
+    try {
+      for (const uid of ids) {
+        try {
+          await authRouter.setUserActive.mutate({
+            userId: uid,
+            isActive: false,
+          });
+          selectedIds.delete(uid);
+          succeeded++;
+        } catch {
+          refused++;
+        }
       }
+    } finally {
+      batchPending = false;
     }
 
-    haptic();
-    toastStore.show(m.admin_users_batch_deactivated({ count: succeeded }));
-    exitMultiSelect();
     void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+
+    if (refused === 0) {
+      haptic();
+      toastStore.show(m.admin_users_batch_deactivated({ count: succeeded }));
+      exitMultiSelect();
+      return;
+    }
+
+    const doneText =
+      succeeded === 1
+        ? m.admin_users_batch_deactivate_result_done_one()
+        : m.admin_users_batch_deactivate_result_done_other({
+            count: succeeded,
+          });
+    const refusedText =
+      refused === 1
+        ? m.admin_users_batch_deactivate_result_refused_one()
+        : m.admin_users_batch_deactivate_result_refused_other({
+            count: refused,
+          });
+    toastStore.show(`${doneText} ${refusedText}`, 3000);
   }
 </script>
 
@@ -601,7 +650,7 @@
   <BulkActionBar
     countLabel={m.admin_users_selected({ count: selectedIds.size })}
     exitLabel={m.admin_users_exit_multiselect()}
-    onexit={exitMultiSelect}
+    onexit={exitMultiSelectFromBar}
     ariaLabel={m.admin_users_selected({ count: selectedIds.size })}
   >
     {#snippet actions()}
@@ -611,7 +660,7 @@
         small
         inline
         class="bulk-action-btn"
-        onclick={() => void handleBatchDeactivate()}
+        onclick={openBatchDeactivateDialog}
       >
         <UserMinus size={16} aria-hidden="true" />
         {m.admin_users_batch_deactivate()}
@@ -680,6 +729,7 @@
             reachability={user.reachability}
             selected={selectedIds.has(user.id)}
             {multiSelectActive}
+            locked={batchPending}
             onedit={(id: string) => void handleUserEdit(id)}
             onselect={toggleSelection}
           />
@@ -835,6 +885,32 @@
       {:else}
         {m.admin_deactivate()}
       {/if}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
+<ShellDialog
+  opened={batchDialogOpened}
+  ondismiss={() => (batchDialogOpened = false)}
+  title={batchCount === 1
+    ? m.admin_batch_deactivate_title_one()
+    : m.admin_batch_deactivate_title_other({ count: batchCount })}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.admin_batch_deactivate_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={() => (batchDialogOpened = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      strong
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={() => void confirmBatchDeactivate()}
+    >
+      {m.admin_deactivate()}
     </DialogButton>
   {/snippet}
 </ShellDialog>
