@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # ready_for_review reruns the gate when a draft is marked ready, so the
+    # coverage-full dispatch below happens for it without a new push.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -197,7 +200,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     permissions:
-      pull-requests: write # tick the Testing box on the pull request
+      pull-requests: write # the CI line on the pull request
+      actions: write # dispatch the coverage-full run
 
     steps:
       - name: Every leg succeeded
@@ -238,6 +242,34 @@ jobs:
           print("green" if green else "failed")
           EOF
           gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --body-file body.md
+
+      # A green run on a ready pull request that changed code dispatches the
+      # coverage-full run (e2e.yml) for its branch. That run is not a check
+      # on the pull request and never blocks a merge; it writes the
+      # "Coverage thresholds met" line when it finishes, 30 to 45 minutes
+      # later, merged or not. Skipped for drafts, for dependabot (read-only
+      # token), for forks, and when nothing outside packages/demo changed
+      # under packages/. continue-on-error keeps a dispatch hiccup from
+      # turning a green gate red.
+      - name: Dispatch the coverage-full run
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && github.event.pull_request.draft == false
+          && github.actor != 'dependabot[bot]'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          changed="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename')"
+          if ! printf '%s\n' "$changed" | grep -qE '^packages/' || ! printf '%s\n' "$changed" | grep -E '^packages/' | grep -qvE '^packages/demo/'; then
+            echo "no code change outside packages/demo, no coverage run"
+            exit 0
+          fi
+          gh workflow run e2e.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" -f mode=coverage-full
+          echo "dispatched coverage-full for $BRANCH"
 
   # Host provisioning scripts run as root and edit auth-critical config.
   # shellcheck comes preinstalled on the runner image: no action, no install.
