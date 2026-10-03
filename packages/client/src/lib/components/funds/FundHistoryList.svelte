@@ -23,6 +23,7 @@
   import type { FundEntryType } from "@care-y/shared";
   import type { LedgerEntryView } from "$lib/funds/fund-store.svelte.js";
   import { formatAmount } from "$lib/funds/fund-display.js";
+  import { formatShortDate } from "$lib/utils/time.js";
 
   interface FundHistoryListProps {
     entries: readonly LedgerEntryView[];
@@ -63,11 +64,7 @@
   }
 
   function recordedAtLabel(entry: LedgerEntryView): string {
-    return new Date(entry.payload.recordedAt).toLocaleDateString([], {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    return formatShortDate(entry.payload.recordedAt);
   }
 </script>
 

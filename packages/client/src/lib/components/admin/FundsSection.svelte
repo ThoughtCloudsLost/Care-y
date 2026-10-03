@@ -89,6 +89,7 @@
   } from "$lib/funds/fund-payloads.js";
   import { isBelowZero, parseMajorAmount } from "$lib/funds/balances.js";
   import { formatAmount } from "$lib/funds/fund-display.js";
+  import { formatShortDate } from "$lib/utils/time.js";
 
   const fundsRouter = requireRouter(trpc.funds, "funds");
   const queryClient = useQueryClient();
@@ -733,6 +734,11 @@
 
     {#if editingFund !== null}
       <div class="deactivate-action">
+        <time class="fund-created" datetime={editingFund.createdAt}>
+          {m.admin_funds_created_on({
+            date: formatShortDate(editingFund.createdAt),
+          })}
+        </time>
         <button
           type="button"
           class="deactivate-btn"
@@ -1071,6 +1077,15 @@
 
   .donations-actions {
     margin: var(--space-sm) var(--space-md);
+  }
+
+  /* The fund's start date sits with the action that ends it. */
+  .fund-created {
+    display: block;
+    margin-bottom: var(--space-sm);
+    font-size: var(--text-xs);
+    color: var(--muted);
+    text-align: center;
   }
 
   .deactivate-action {

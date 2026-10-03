@@ -179,6 +179,7 @@ function fund(
     isActive: true,
     sortOrder: 0,
     orgKeyGeneration: 1,
+    createdAt: "2026-09-01T12:00:00.000Z",
     balance: { balanceMinor, version: 7 },
     raised: { kind: "unlinked" },
     available: { kind: "amount", minor: balanceMinor },
