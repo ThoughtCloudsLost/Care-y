@@ -2,7 +2,8 @@
 /**
  * NewTicketController tests: the two lookups the form depends on pass
  * successful results through unchanged, and a rejection reaches the form
- * as a LookupFailedError carrying the message to show.
+ * as a LookupFailedError whose message depends on whether the server sent
+ * a known code, never replied, or replied with something unmapped.
  *
  * ShellSheet is stubbed with the PassthroughShell helper and the form
  * with NewTicketFormStub, which drives each lookup from a button.
@@ -107,6 +108,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesNS>()),
   error_network: () => "Could not reach the server",
+  error_generic: () => "Something went wrong",
   error_insufficient_permissions: () =>
     "You do not have permission to do this.",
   ticket_new_title: () => "New ticket",
@@ -181,7 +183,7 @@ describe("NewTicketController", () => {
     });
   });
 
-  it("falls back to the connection message for a failure with no known code", async () => {
+  it("shows the connection message when the request never reaches the server", async () => {
     mockListKeys.mockRejectedValueOnce(
       TRPCClientError.from(new TypeError("Failed to fetch")),
     );
@@ -194,5 +196,42 @@ describe("NewTicketController", () => {
         "Could not reach the server",
       );
     });
+  });
+
+  it("shows the connection message when a fetch TypeError is the cause", async () => {
+    mockResolveCreateTarget.mockRejectedValueOnce(
+      new Error("fetch failed", { cause: new TypeError("Failed to fetch") }),
+    );
+    render(NewTicketController, { props: baseProps });
+
+    await fireEvent.click(await screen.findByTestId("stub-resolve"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("stub-error").textContent).toBe(
+        "Could not reach the server",
+      );
+    });
+  });
+
+  it("shows the generic message when the server answers with an unmapped error", async () => {
+    mockListKeys.mockRejectedValueOnce(
+      TRPCClientError.from({
+        error: {
+          message: "Internal server error",
+          code: -32603,
+          data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 },
+        },
+      }),
+    );
+    render(NewTicketController, { props: baseProps });
+
+    await fireEvent.click(await screen.findByTestId("stub-keys"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("stub-error").textContent).toBe(
+        "Something went wrong",
+      );
+    });
+    expect(screen.queryByText("Could not reach the server")).toBeNull();
   });
 });

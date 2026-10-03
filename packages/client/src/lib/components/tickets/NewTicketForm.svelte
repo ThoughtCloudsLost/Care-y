@@ -183,7 +183,9 @@
     } catch (err: unknown) {
       // The parent turns a failed lookup into a LookupFailedError whose
       // message is ready to show; the form stays filled in for a retry.
-      // Anything else the worker path throws is an encryption failure.
+      // A worker or client error from the encryption path is an encryption
+      // failure, and anything unexpected shows the generic message and is
+      // rethrown so it still surfaces.
       if (err instanceof LookupFailedError) {
         errors = { form: err.message };
       } else if (
@@ -192,6 +194,7 @@
       ) {
         errors = { form: m.ticket_new_error_encrypt_failed(withTerms()) };
       } else {
+        errors = { form: m.error_generic() };
         throw err;
       }
     } finally {

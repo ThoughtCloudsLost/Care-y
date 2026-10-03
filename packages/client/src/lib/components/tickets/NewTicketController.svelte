@@ -10,6 +10,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { isTRPCClientError } from "@trpc/client";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import NewTicketForm from "./NewTicketForm.svelte";
@@ -97,19 +98,38 @@
   }
 
   /**
+   * True when the request never got a reply from the server: tRPC raised
+   * the error itself with no server error data attached, or the underlying
+   * cause is the TypeError fetch throws when the network is unreachable.
+   */
+  function isTransportFailure(err: unknown): boolean {
+    if (isTRPCClientError(err)) {
+      const data: unknown = err.data;
+      if (data === undefined || data === null) return true;
+    }
+    return err instanceof Error && err.cause instanceof TypeError;
+  }
+
+  /**
    * Runs one of the form's lookups and turns a rejection into a
    * LookupFailedError carrying the message to show: the mapped text when
-   * the server sent a known error code, otherwise the connection message.
+   * the server sent a known error code, the connection message when the
+   * request never reached the server, and the generic message when the
+   * server answered with something unmapped.
    */
   async function lookup<T>(call: () => Promise<T>): Promise<T> {
     try {
       return await call();
     } catch (err: unknown) {
-      throw new LookupFailedError(
-        err instanceof Error && isErrorCode(err.message)
-          ? getErrorMessage(err)
-          : m.error_network(),
-      );
+      let message: string;
+      if (err instanceof Error && isErrorCode(err.message)) {
+        message = getErrorMessage(err);
+      } else if (isTransportFailure(err)) {
+        message = m.error_network();
+      } else {
+        message = m.error_generic();
+      }
+      throw new LookupFailedError(message);
     }
   }
 
