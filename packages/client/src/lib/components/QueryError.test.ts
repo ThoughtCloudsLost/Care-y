@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import QueryError from "./QueryError.svelte";
 
 afterEach(cleanup);
@@ -93,5 +93,32 @@ describe("QueryError", () => {
     const onretry = () => {};
     render(QueryError, { props: { error: new Error("test"), onretry } });
     expect(screen.getByText("Try again")).toBeTruthy();
+  });
+
+  it("renders the message override in place of the mapped message", () => {
+    render(QueryError, {
+      props: { error: new Error("UNKNOWN_CODE"), message: "Custom message" },
+    });
+    expect(screen.getByText("Custom message")).toBeTruthy();
+    expect(
+      screen.queryByText("Something went wrong. Please try again."),
+    ).toBeNull();
+  });
+
+  it("renders the secondary action and calls its handler on click", async () => {
+    const onclick = vi.fn();
+    render(QueryError, {
+      props: {
+        error: new Error("test"),
+        action: { label: "Go back", onclick },
+      },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+    expect(onclick).toHaveBeenCalledOnce();
+  });
+
+  it("renders no secondary action when action is not provided", () => {
+    render(QueryError, { props: { error: new Error("test") } });
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });
