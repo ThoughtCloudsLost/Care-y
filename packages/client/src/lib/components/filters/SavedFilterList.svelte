@@ -20,6 +20,10 @@
     ondelete: (id: string) => void;
     ontoggleshare: (id: string) => void;
     currentUserId: string | null;
+    /** True when shared filters failed to load for a reason other than permission. */
+    sharedLoadFailed?: boolean;
+    /** Retry the shared-filter fetch. */
+    onretryshared?: () => void;
   }
 
   let {
@@ -29,6 +33,8 @@
     ondelete,
     ontoggleshare,
     currentUserId,
+    sharedLoadFailed = false,
+    onretryshared,
   }: Props = $props();
 
   const orgCache = getOrgDecryptCache();
@@ -45,11 +51,28 @@
     return orgCache.decrypt(`saved-filter:${record.id}`, record.encryptedName);
   }
 
-  function onPointerDown(id: string): void {
+  /** True when the current user owns the record (or it is local). */
+  function ownsRecord(record: SavedFilterRecord): boolean {
+    return (
+      currentUserId == null ||
+      record.ownerId === currentUserId ||
+      record.ownerId === ""
+    );
+  }
+
+  /**
+   * Only the owner gets the action sheet; on anyone else's filter the
+   * gesture does nothing.
+   */
+  function openActionSheet(record: SavedFilterRecord): void {
+    if (ownsRecord(record)) actionSheetFilterId = record.id;
+  }
+
+  function onPointerDown(record: SavedFilterRecord): void {
     pressTriggered = false;
     pressTimer = setTimeout(() => {
       pressTriggered = true;
-      actionSheetFilterId = id;
+      openActionSheet(record);
     }, LONG_PRESS_MS);
   }
 
@@ -95,14 +118,6 @@
       ? filters.find((f) => f.id === actionSheetFilterId)
       : undefined,
   );
-
-  /** True when the current user owns the active record (or it is local). */
-  const isOwner = $derived(
-    activeRecord != null &&
-      (currentUserId == null ||
-        activeRecord.ownerId === currentUserId ||
-        activeRecord.ownerId === ""),
-  );
 </script>
 
 {#if count > 0}
@@ -121,12 +136,12 @@
           class="saved-filter-chip"
           style="--chip-color: {color}"
           aria-label={name ?? m.saved_filter_decrypting()}
-          onpointerdown={() => onPointerDown(record.id)}
+          onpointerdown={() => onPointerDown(record)}
           onpointerup={() => onPointerUp(record)}
           onpointercancel={onPointerCancel}
           oncontextmenu={(e) => {
             e.preventDefault();
-            actionSheetFilterId = record.id;
+            openActionSheet(record);
           }}
         >
           <span class="chip-icon" aria-hidden="true">
@@ -152,6 +167,17 @@
   </div>
 {/if}
 
+{#if sharedLoadFailed}
+  <div class="saved-filter-error" role="alert">
+    <p>{m.saved_filter_shared_load_failed()}</p>
+    {#if onretryshared}
+      <button type="button" class="retry-btn" onclick={onretryshared}>
+        {m.common_retry()}
+      </button>
+    {/if}
+  </div>
+{/if}
+
 <ShellActionSheet
   opened={actionSheetFilterId !== null}
   ondismiss={closeActionSheet}
@@ -162,19 +188,17 @@
       {@const name = decryptName(activeRecord)}
       <ActionsLabel>{name ?? m.saved_filter_decrypting()}</ActionsLabel>
     {/if}
-    {#if isOwner}
-      <ActionsButton onclick={handleToggleShare}>
-        {activeRecord?.shared === true
-          ? m.saved_filter_unshare()
-          : m.saved_filter_share()}
-      </ActionsButton>
-      <ActionsButton
-        colors={{ textIos: "text-red-500", textMaterial: "text-red-500" }}
-        onclick={handleDelete}
-      >
-        {m.saved_filter_delete()}
-      </ActionsButton>
-    {/if}
+    <ActionsButton onclick={handleToggleShare}>
+      {activeRecord?.shared === true
+        ? m.saved_filter_unshare()
+        : m.saved_filter_share()}
+    </ActionsButton>
+    <ActionsButton
+      colors={{ textIos: "text-red-500", textMaterial: "text-red-500" }}
+      onclick={handleDelete}
+    >
+      {m.saved_filter_delete()}
+    </ActionsButton>
   </ActionsGroup>
   <ActionsGroup>
     <ActionsButton bold onclick={closeActionSheet}>
@@ -258,5 +282,28 @@
   :global(.chip-shared-icon) {
     opacity: 0.5;
     margin-left: 2px;
+  }
+
+  .saved-filter-error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2px 0;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .saved-filter-error p {
+    margin: 0;
+  }
+
+  .retry-btn {
+    padding: 0;
+    color: var(--brand-text);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    text-decoration: underline;
   }
 </style>
