@@ -9,6 +9,7 @@ import {
   getFullSearchStateForProvider,
   registerSearchProvider,
   resetFullSearch,
+  runFullSearchForProvider,
 } from "$lib/search/registry.svelte.js";
 import type {
   FullSearchState,
@@ -79,11 +80,13 @@ describe("FullSearchPanel", () => {
       ),
     ).toBeDefined();
     await fireEvent.click(trigger);
+    // The global search has no filters, so its run is unscoped.
     expect(fullSearch).toHaveBeenCalledWith(
       "housing",
       expect.anything(),
       expect.any(Function),
       expect.any(AbortSignal),
+      undefined,
     );
   });
 
@@ -303,5 +306,100 @@ describe("FullSearchPanel", () => {
 
     releaseA();
     releaseB();
+  });
+
+  it("starts an unscoped run instead of reusing one scoped to page filters", async () => {
+    const scopes: unknown[] = [];
+    const fullSearch = vi.fn(
+      async (
+        _q: string,
+        _s: FullSearchState,
+        _p: () => void,
+        _sig: AbortSignal,
+        scope?: unknown,
+      ): Promise<void> => {
+        scopes.push(scope);
+      },
+    );
+    cleanups.push(registerSearchProvider(providerWithFullSearch(fullSearch)));
+    runFullSearchForProvider("aa", "housing", { queueIds: ["q1"] });
+    await waitFor(() => {
+      expect(getFullSearchStateForProvider("aa")?.status).toBe("done");
+    });
+
+    render(FullSearchPanel, {
+      props: {
+        query: "housing",
+        groups: [makeGroup(5)],
+        hasAnyResults: false,
+      },
+    });
+
+    await waitFor(() => {
+      expect(fullSearch).toHaveBeenCalledTimes(2);
+    });
+    expect(scopes).toEqual([{ queueIds: ["q1"] }, undefined]);
+  });
+
+  it("offers the trigger rather than a scoped run's summary", async () => {
+    const fullSearch = vi.fn(async () => undefined);
+    cleanups.push(registerSearchProvider(providerWithFullSearch(fullSearch)));
+    runFullSearchForProvider("aa", "housing", { queueIds: ["q1"] });
+    await waitFor(() => {
+      expect(getFullSearchStateForProvider("aa")?.status).toBe("done");
+    });
+
+    const { getByRole } = render(FullSearchPanel, {
+      props: {
+        query: "housing",
+        groups: [makeGroup(5)],
+        hasAnyResults: true,
+      },
+    });
+
+    expect(
+      getByRole("button", { name: "Search everything not yet unlocked" }),
+    ).toBeDefined();
+    expect(fullSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for a scoped run to settle before auto-running the unscoped search", async () => {
+    const scopes: unknown[] = [];
+    let releaseScoped: () => void = () => undefined;
+    const fullSearch = vi.fn(
+      async (
+        _q: string,
+        _s: FullSearchState,
+        _p: () => void,
+        _sig: AbortSignal,
+        scope?: unknown,
+      ): Promise<void> => {
+        scopes.push(scope);
+        if (scopes.length === 1) {
+          await new Promise<void>((resolve) => {
+            releaseScoped = resolve;
+          });
+        }
+      },
+    );
+    cleanups.push(registerSearchProvider(providerWithFullSearch(fullSearch)));
+    runFullSearchForProvider("aa", "housing", { queueIds: ["q1"] });
+
+    render(FullSearchPanel, {
+      props: {
+        query: "housing",
+        groups: [makeGroup(5)],
+        hasAnyResults: false,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fullSearch).toHaveBeenCalledTimes(1);
+    expect(getFullSearchStateForProvider("aa")?.status).toBe("searching");
+
+    releaseScoped();
+    await waitFor(() => {
+      expect(fullSearch).toHaveBeenCalledTimes(2);
+    });
+    expect(scopes).toEqual([{ queueIds: ["q1"] }, undefined]);
   });
 });

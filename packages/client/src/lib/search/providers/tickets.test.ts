@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import type { RawCachedTicket, TicketSearchProviderDeps } from "./tickets.js";
-import { createTicketSearchProvider } from "./tickets.js";
+import type {
+  RawCachedTicket,
+  TicketSearchProviderDeps,
+  TicketSearchScope,
+} from "./tickets.js";
+import { createTicketSearchProvider, ticketSearchScope } from "./tickets.js";
+import type { TicketListServerParams } from "$lib/stores/filters.svelte.js";
 import type { CoverageState, FullSearchState } from "../types.js";
+import { fullSearchScopeKey } from "../registry.svelte.js";
 import type * as Messages from "$lib/paraglide/messages.js";
 import type * as WithTermsModule from "$lib/terminology/with-terms.js";
 import type * as AsyncDecryptCacheModule from "$lib/crypto/async-decrypt-cache.js";
@@ -354,10 +360,16 @@ describe("ticket fullSearch (two-phase)", () => {
     decryptTitle?: (id: string) => string | undefined;
     /** Runs on every listAll call, before the page is returned. */
     onListAll?: () => void;
+    /** Receives the arguments of every listAll call. */
+    onListAllArgs?: (
+      cursor: string | undefined,
+      scope: TicketSearchScope | undefined,
+    ) => void;
     /** listAll call index (0-based) that rejects instead of returning a page. */
     failListAllAt?: number;
     getTotalItemCount?: () => number | undefined;
     contentSearch?: TicketSearchProviderDeps["contentSearch"];
+    ingestTickets?: TicketSearchProviderDeps["ingestTickets"];
   }): ReturnType<typeof createTicketSearchProvider> {
     const pages = overrides.listAllPages ?? [];
     let pageIndex = 0;
@@ -373,7 +385,8 @@ describe("ticket fullSearch (two-phase)", () => {
       currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
       getTotalItemCount: overrides.getTotalItemCount,
-      listAll: vi.fn(async () => {
+      listAll: vi.fn(async (cursor?: string, scope?: TicketSearchScope) => {
+        overrides.onListAllArgs?.(cursor, scope);
         if (pageIndex === overrides.failListAllAt) {
           throw new Error("Network error");
         }
@@ -382,7 +395,7 @@ describe("ticket fullSearch (two-phase)", () => {
         overrides.onListAll?.();
         return page;
       }),
-      ingestTickets: vi.fn(),
+      ingestTickets: overrides.ingestTickets ?? vi.fn(),
       whenDecryptsSettled: vi.fn(async () => undefined),
       decryptFollowUp: vi.fn((_tid: string, fid: string) => decryptedFu[fid]),
       contentSearch:
@@ -413,6 +426,58 @@ describe("ticket fullSearch (two-phase)", () => {
     expect(state.matchCount).toBeGreaterThanOrEqual(1);
     expect(state.total).toBe(101);
     expect(onProgress).toHaveBeenCalled();
+  });
+
+  it("passes its run's scope to every page fetch", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) =>
+      makeRawTicket({ id: `p1-${i}`, keyWrap: KW }),
+    );
+    const page2 = [makeRawTicket({ id: "p2-0", keyWrap: KW })];
+    const calls: {
+      cursor: string | undefined;
+      scope: TicketSearchScope | undefined;
+    }[] = [];
+
+    const provider = createFullSearchProvider({
+      listAllPages: [page1, page2],
+      decryptTitle: () => "Unrelated topic",
+      onListAllArgs: (cursor, scope) => {
+        calls.push({ cursor, scope });
+      },
+    });
+
+    const scope: TicketSearchScope = {
+      queueIds: ["q1"],
+      priorities: ["high"],
+    };
+    await provider.fullSearch!(
+      "Housing",
+      makeState(),
+      vi.fn(),
+      liveSignal(),
+      scope,
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.scope).toBe(scope);
+    expect(calls[1]?.scope).toBe(scope);
+    expect(calls[1]?.cursor).toBe("p1-99");
+  });
+
+  it("fetches unscoped when the run has no scope", async () => {
+    const scopes: (TicketSearchScope | undefined)[] = [];
+
+    const provider = createFullSearchProvider({
+      listAllPages: [[makeRawTicket({ id: "t1", keyWrap: KW })]],
+      decryptTitle: () => "Unrelated topic",
+      onListAllArgs: (_cursor, scope) => {
+        scopes.push(scope);
+      },
+    });
+
+    await provider.fullSearch!("Housing", makeState(), vi.fn(), liveSignal());
+
+    expect(scopes).toEqual([undefined]);
   });
 
   it("stops paginating as soon as its run is aborted", async () => {
@@ -490,6 +555,66 @@ describe("ticket fullSearch (two-phase)", () => {
     const { results } = provider.search("housing");
     expect(results.some((r) => r.id === "t1")).toBe(true);
     expect(results.some((r) => r.id === "t3")).toBe(true);
+  });
+
+  it("leaves the fullSearch cache entry alone on a scoped run", async () => {
+    const ingestTickets = vi.fn();
+    const provider = createFullSearchProvider({
+      listAllPages: [[makeRawTicket({ id: "t1", keyWrap: KW })]],
+      ingestTickets,
+    });
+
+    await provider.fullSearch!("Housing", makeState(), vi.fn(), liveSignal(), {
+      queueIds: ["q1"],
+    });
+
+    expect(ingestTickets).not.toHaveBeenCalled();
+  });
+
+  it("writes the fullSearch cache entry on an unscoped run", async () => {
+    const ingestTickets = vi.fn();
+    const provider = createFullSearchProvider({
+      listAllPages: [[makeRawTicket({ id: "t1", keyWrap: KW })]],
+      ingestTickets,
+    });
+
+    await provider.fullSearch!("Housing", makeState(), vi.fn(), liveSignal());
+
+    expect(ingestTickets).toHaveBeenCalledOnce();
+    expect(ingestTickets).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "t1" }),
+    ]);
+  });
+
+  it("keeps a scoped run's content matches out of search()", async () => {
+    const tickets = [
+      makeRawTicket({ id: "t1", keyWrap: KW }),
+      makeRawTicket({ id: "t2", keyWrap: KW }),
+      makeRawTicket({ id: "t3", keyWrap: KW }),
+    ];
+
+    const provider = createFullSearchProvider({
+      listAllPages: [tickets],
+      contentSearchFollowups: [
+        {
+          ticketId: "t3",
+          followupId: "fu-1",
+          encryptedContent: "encrypted-note",
+        },
+      ],
+      decryptedFollowUps: {
+        "fu-1": "This note discusses housing policy",
+      },
+    });
+
+    await provider.fullSearch!("housing", makeState(), vi.fn(), liveSignal(), {
+      queueIds: ["q1"],
+    });
+
+    expect(provider.getContentMatchIds!().has("t3")).toBe(true);
+    expect(provider.search("housing").results.some((r) => r.id === "t3")).toBe(
+      false,
+    );
   });
 
   it("updates progress state across both phases", async () => {
@@ -574,6 +699,27 @@ describe("ticket fullSearch (two-phase)", () => {
     const state = makeState();
     await expect(
       provider.fullSearch!("Housing", state, vi.fn(), liveSignal()),
+    ).rejects.toThrow("Network error");
+
+    expect(state.total).toBe(100);
+    expect(state.searched).toBe(0);
+  });
+
+  it("reports the loaded count as the total when a scoped run's listing fails", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) =>
+      makeRawTicket({ id: `p1-${i}`, keyWrap: KW }),
+    );
+    const provider = createFullSearchProvider({
+      listAllPages: [page1, page1],
+      decryptTitle: () => "Unrelated topic",
+      failListAllAt: 1,
+      getTotalItemCount: () => 900,
+    });
+
+    const state = makeState();
+    const scope: TicketSearchScope = { queueIds: ["q1"] };
+    await expect(
+      provider.fullSearch!("Housing", state, vi.fn(), liveSignal(), scope),
     ).rejects.toThrow("Network error");
 
     expect(state.total).toBe(100);
@@ -703,6 +849,77 @@ describe("ticket fullSearch (two-phase)", () => {
 
     expect(state.matchCount).toBe(1);
     expect(contentSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe("ticketSearchScope", () => {
+  it("keeps the filter fields and drops sort and page size", () => {
+    const params: TicketListServerParams = {
+      statuses: ["open"],
+      onHold: false,
+      queueIds: ["q1"],
+      priorities: ["high"],
+      assignedTo: null,
+      createdAfter: "2026-01-01T00:00:00.000Z",
+      createdBefore: "2026-02-01T00:00:00.000Z",
+      sortBy: "priority",
+      sortDirection: "asc",
+      limit: 50,
+    };
+
+    const scope = ticketSearchScope(params);
+
+    expect(scope).toEqual({
+      statuses: ["open"],
+      onHold: false,
+      queueIds: ["q1"],
+      priorities: ["high"],
+      assignedTo: null,
+      createdAfter: "2026-01-01T00:00:00.000Z",
+      createdBefore: "2026-02-01T00:00:00.000Z",
+    });
+    expect(scope).not.toHaveProperty("sortBy");
+    expect(scope).not.toHaveProperty("sortDirection");
+    expect(scope).not.toHaveProperty("limit");
+  });
+
+  it("returns undefined when no server filter is set", () => {
+    expect(
+      ticketSearchScope({ sortBy: "date", sortDirection: "desc", limit: 50 }),
+    ).toBeUndefined();
+  });
+
+  it("treats an unassigned filter as a scope", () => {
+    expect(
+      ticketSearchScope({
+        sortBy: "date",
+        sortDirection: "desc",
+        limit: 50,
+        assignedTo: null,
+      }),
+    ).toEqual({ assignedTo: null });
+  });
+
+  it("gives the same key for the same selection in another order, without reordering the params", () => {
+    const a: TicketListServerParams = {
+      sortBy: "date",
+      sortDirection: "desc",
+      limit: 50,
+      queueIds: ["q2", "q1"],
+      priorities: ["urgent", "high"],
+    };
+    const b: TicketListServerParams = {
+      sortBy: "date",
+      sortDirection: "desc",
+      limit: 50,
+      queueIds: ["q1", "q2"],
+      priorities: ["high", "urgent"],
+    };
+
+    expect(fullSearchScopeKey(ticketSearchScope(a))).toBe(
+      fullSearchScopeKey(ticketSearchScope(b)),
+    );
+    expect(a.queueIds).toEqual(["q2", "q1"]);
   });
 });
 

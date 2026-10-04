@@ -707,6 +707,8 @@
   "search_deep_nav_loading": "Cargando {count}...",
   "search_deep_incomplete": "La búsqueda profunda se detuvo. Se revisaron {searched} de {total} {tickets}.",
   "search_deep_incomplete_articles": "La búsqueda profunda se detuvo. Se revisaron {searched} de {total} artículos.",
+  "search_filter_scoped_notice": "Buscando dentro de los filtros actuales.",
+  "search_filter_scoped_clear": "Buscar en todos los {tickets}",
   "search_inline_trigger": "Buscar en esta página",
   "search_section_conversation": "En esta conversación",
   "search_conversation_scope": "Buscados {searched} de {total} mensajes",

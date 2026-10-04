@@ -24,6 +24,14 @@
     ondeepsearchretry?: () => void;
     /** Composed coverage line for the incomplete state (the caller owns the noun). */
     deepSearchIncompleteText?: string;
+    /**
+     * Clears the surface's filters. With clearFiltersLabel, shows the
+     * filter-scope row under the bar; the caller passes both only while
+     * filters are active.
+     */
+    onclearfilters?: () => void;
+    /** Composed label for the clear-filters button (the caller owns the noun). */
+    clearFiltersLabel?: string;
   }
 
   const {
@@ -41,6 +49,8 @@
     deepSearchTotal = 0,
     ondeepsearchretry,
     deepSearchIncompleteText,
+    onclearfilters,
+    clearFiltersLabel,
   }: Props = $props();
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -202,6 +212,14 @@
     </Button>
   </div>
 </div>
+{#if onclearfilters != null && clearFiltersLabel != null}
+  <div class="search-scope-row">
+    <span class="search-scope-text">{m.search_filter_scoped_notice()}</span>
+    <Button clear small inline onclick={onclearfilters}>
+      {clearFiltersLabel}
+    </Button>
+  </div>
+{/if}
 
 <style>
   /* Navigator bar layout */
@@ -254,6 +272,22 @@
     white-space: nowrap;
     margin-left: auto;
     margin-right: auto;
+  }
+
+  /* Second row: says the search covers only the active filters. */
+  .search-scope-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs, 4px);
+    padding: 0 0.25rem 0.25rem 0.5rem;
+  }
+
+  .search-scope-text {
+    font-size: var(--text-xs, 0.75rem);
+    line-height: 1.25;
+    color: var(--muted);
+    min-width: 0;
   }
 
   .search-nav-buttons {

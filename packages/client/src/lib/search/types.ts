@@ -57,7 +57,7 @@ export interface SearchResultGroup<T = unknown> {
 }
 
 /** Contract that every search provider must implement. */
-export interface SearchProvider<T = unknown> {
+export interface SearchProvider<T = unknown, S = unknown> {
   readonly id: string;
   /** Returns the localized display name for this provider's section header. */
   readonly label: () => string;
@@ -108,12 +108,18 @@ export interface SearchProvider<T = unknown> {
    * iteration and return early: the registry discards a stale run's writes,
    * but only the provider can stop it from doing more work and from mutating
    * its own content-match set behind the new run's back.
+   *
+   * `scope` narrows the run to the calling surface's active filters (the
+   * tickets list passes its filter params). A surface with no filters, such
+   * as the global search, passes nothing and the run covers everything the
+   * account can reach.
    */
   fullSearch?(
     query: string,
     state: FullSearchState,
     onProgress: () => void,
     signal: AbortSignal,
+    scope?: S,
   ): Promise<void>;
   /**
    * Optional callback for "View all" that bypasses navigation. When present,

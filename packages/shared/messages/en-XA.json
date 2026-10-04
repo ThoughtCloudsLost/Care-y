@@ -707,6 +707,8 @@
   "search_deep_nav_loading": "⟦Lòàdìng  •••{count}... •⟧",
   "search_deep_incomplete": "⟦Dèèpèr sèàrch stòppèd. Sèàrchèd  ••••••••••{searched} òf  ••{total}  •{tickets}. •⟧",
   "search_deep_incomplete_articles": "⟦Dèèpèr sèàrch stòppèd. Sèàrchèd  ••••••••••{searched} òf  ••{total} àrtìclès. •••⟧",
+  "search_filter_scoped_notice": "⟦Sèàrchìng wìthìn thè cùrrènt fìltèrs. ••••••••••••⟧",
+  "search_filter_scoped_clear": "⟦Sèàrch àll  ••••{tickets}⟧",
   "search_inline_trigger": "⟦Sèàrch thìs pàgè •••••⟧",
   "search_section_conversation": "⟦Ìn thìs cònvèrsàtìòn ••••••⟧",
   "search_conversation_scope": "⟦Sèàrchèd  •••{searched} òf  ••{total} mèssàgès •••⟧",
