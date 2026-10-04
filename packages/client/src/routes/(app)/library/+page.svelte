@@ -543,8 +543,9 @@
     filters: kbSavedFilterStore.filters,
     count: kbSavedFilterStore.count,
     onapply: dispatch.handleSavedFilterApply,
-    ondelete: dispatch.handleSavedFilterDelete,
-    ontoggleshare: dispatch.handleSavedFilterToggleShare,
+    ondelete: (id: string) => void dispatch.handleSavedFilterDelete(id),
+    ontoggleshare: (id: string) =>
+      void dispatch.handleSavedFilterToggleShare(id),
     currentUserId: currentUserId ?? null,
   });
 
