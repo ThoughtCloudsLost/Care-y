@@ -46,8 +46,8 @@ export interface AdminDestination {
   readonly implemented: boolean;
   /**
    * Declares admission only; renders no hub tile. Lets a surface without
-   * a tile (the manager page, the roles tab) keep its admission rule in
-   * this registry so canEnterAdminRoute remains the single source.
+   * a tile (the roles tab) keep its admission rule in this registry so
+   * canEnterAdminRoute remains the single source.
    */
   readonly hidden?: true;
 }
@@ -301,17 +301,6 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     subtitle: m.admin_tab_roles,
     path: "/admin/people?tab=roles",
     permission: Permission.MANAGE_ROLES,
-    implemented: true,
-    hidden: true,
-  },
-  {
-    id: "manager-hub",
-    group: "people",
-    icon: Users,
-    label: () => m.mgr_page_title(withTerms()),
-    subtitle: () => m.mgr_page_title(withTerms()),
-    path: "/admin/manager",
-    permission: Permission.MANAGE_USERS,
     implemented: true,
     hidden: true,
   },

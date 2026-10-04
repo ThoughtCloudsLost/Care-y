@@ -5,7 +5,6 @@
   import { queueKeys, ticketsKeys } from "$lib/query/keys.js";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { canEnterAdminRoute } from "$lib/admin/destinations.js";
   import {
     ClipboardList,
     Layers,
@@ -19,10 +18,7 @@
     getNavbarOverrideCtx,
     getSectionRailCtx,
   } from "$lib/shell/context.js";
-  import {
-    getCurrentPermissions,
-    getOrgDecryptCache,
-  } from "$lib/crypto/context.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { requireRouter } from "$lib/errors.js";
@@ -34,14 +30,6 @@
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
-
-  const permissionsGetter = getCurrentPermissions();
-  const permissions = $derived(permissionsGetter());
-  const hasAccess = $derived(canEnterAdminRoute(permissions, "/admin/manager"));
-
-  $effect(() => {
-    if (!hasAccess) void goto(resolve("/"));
-  });
 
   const orgCache = getOrgDecryptCache();
 
