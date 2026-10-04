@@ -172,3 +172,27 @@ export class SeedReplayError extends ClientError {
     if (cause !== undefined) this.cause = cause;
   }
 }
+
+/**
+ * A saved filter could not be written to this device's localStorage
+ * (storage full, or unavailable as in some private browsing modes).
+ * The store leaves its state as it was before the write.
+ */
+export class SavedFilterStorageError extends ClientError {
+  constructor() {
+    super("Saved filter could not be written to device storage");
+    this.name = "SavedFilterStorageError";
+  }
+}
+
+/** True when a tRPC call failed with the given server error code (data.code). */
+export function hasTrpcErrorCode(err: unknown, code: string): boolean {
+  if (!isTRPCClientError(err)) return false;
+  const data: unknown = err.data;
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "code" in data &&
+    data.code === code
+  );
+}

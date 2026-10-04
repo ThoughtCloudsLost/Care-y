@@ -12,11 +12,14 @@
     PICKER_ICONS,
   } from "$lib/components/inputs/picker-options.js";
   import type { SavedFilterColor } from "@care-y/shared";
+  import FieldError from "$lib/components/FieldError.svelte";
+  import { SavedFilterStorageError } from "$lib/errors.js";
 
   interface Props {
     opened: boolean;
     filterSummary: string;
     ondismiss: () => void;
+    /** Throws SavedFilterStorageError when the filter could not be stored; the sheet then stays open and says so. */
     onsave: (meta: {
       encryptedName: string;
       color: SavedFilterColor;
@@ -31,19 +34,35 @@
   let name = $state("");
   let selectedColor = $state<SavedFilterColor>("blue");
   let selectedIcon = $state("tag");
+  let errorMessage = $state<string | null>(null);
+  let wasOpen = $state(false);
+
+  $effect(() => {
+    if (opened && !wasOpen) {
+      errorMessage = null;
+    }
+    wasOpen = opened;
+  });
 
   const canSave = $derived(name.trim().length > 0);
 
   async function handleSave(): Promise<void> {
     if (!canSave) return;
+    errorMessage = null;
 
     const encryptedName = await orgKeyManager.encryptText(name.trim());
 
-    onsave({
-      encryptedName,
-      color: selectedColor,
-      icon: selectedIcon,
-    });
+    try {
+      onsave({
+        encryptedName,
+        color: selectedColor,
+        icon: selectedIcon,
+      });
+    } catch (err: unknown) {
+      if (!(err instanceof SavedFilterStorageError)) throw err;
+      errorMessage = m.saved_filter_save_failed();
+      return;
+    }
 
     name = "";
     selectedColor = "blue";
@@ -96,6 +115,10 @@
         label={m.saved_filter_icon_label()}
       />
     </div>
+
+    {#if errorMessage}
+      <FieldError message={errorMessage} />
+    {/if}
   </div>
 </ShellSheet>
 

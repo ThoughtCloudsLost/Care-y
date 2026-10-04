@@ -13,6 +13,12 @@
  * holds it (local for private, server for shared).
  *
  * Decryption of names happens at render time via OrgDecryptCache.
+ *
+ * A failed localStorage write never passes silently. `add` leaves the list
+ * unchanged and throws SavedFilterStorageError for the create sheet to
+ * show. Removing a private filter rolls back and raises a toast. Share,
+ * unshare and reseal have already changed server or key state that cannot
+ * be undone, so they keep the new state for the session and raise a toast.
  */
 
 import {
@@ -24,8 +30,14 @@ import {
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { resealSavedFilterNames } from "./saved-filter-reseal.js";
 import { trpc } from "$lib/trpc/index.js";
-import { requireRouter } from "$lib/errors.js";
+import {
+  requireRouter,
+  SavedFilterStorageError,
+  hasTrpcErrorCode,
+} from "$lib/errors.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
+import { toastStore } from "$lib/stores/toast.svelte.js";
+import * as m from "$lib/paraglide/messages.js";
 
 export type { SavedFilterState };
 
@@ -48,16 +60,20 @@ function loadFromStorage(): SavedFilterRecord[] {
   }
 }
 
-function saveToStorage(records: SavedFilterRecord[]): void {
+/** Write the private filters. Returns false when storage refuses the write. */
+function saveToStorage(records: SavedFilterRecord[]): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    return true;
   } catch {
-    // localStorage full or unavailable (private browsing). Silently fail.
+    // Storage full or unavailable (private browsing). Callers report it.
+    return false;
   }
 }
 
 export interface SavedFilterStore {
   readonly filters: SavedFilterRecord[];
+  /** Add a private filter. Throws SavedFilterStorageError, leaving the list unchanged, when the write fails. */
   add(record: SavedFilterRecord): void;
   /** Remove a filter (local or shared). Async for shared filters. */
   remove(id: string): void;
@@ -65,6 +81,10 @@ export interface SavedFilterStore {
   toggleShare(id: string): void;
   /** Fetch shared filters from the server and decrypt their state. */
   loadShared(orgKeyManager: OrgKeyManager): Promise<void>;
+  /** True when the last shared-filter fetch failed for a reason other than missing permission. */
+  readonly sharedLoadFailed: boolean;
+  /** Re-run the shared-filter fetch with the key manager from the last loadShared call. */
+  retryShared(): Promise<void>;
   resealNames(bridge: CryptoBridge): Promise<void>;
   readonly count: number;
   /** Set context needed for share/unshare/delete operations. */
@@ -76,9 +96,14 @@ function createSavedFilterStore(): SavedFilterStore {
   let sharedFilters = $state<SavedFilterRecord[]>([]);
   let currentUserId: string | null = null;
   let currentOrgKeyMgr: OrgKeyManager | null = null;
+  let sharedLoadFailed = $state(false);
+  let sharedLoadKeyMgr: OrgKeyManager | null = null;
 
-  function persistLocal(): void {
-    saveToStorage(localFilters);
+  /** Persist private filters; on failure tell the account with a toast. */
+  function persistLocalOrToast(): void {
+    if (!saveToStorage(localFilters)) {
+      toastStore.show(m.saved_filter_save_failed());
+    }
   }
 
   function mergedFilters(): SavedFilterRecord[] {
@@ -104,8 +129,11 @@ function createSavedFilterStore(): SavedFilterStore {
       icon: local.icon,
     });
 
+    // The server share has succeeded and cannot be undone here. If the
+    // local removal does not persist, the private copy returns on reload
+    // beside the shared one; the toast says the device write failed.
     localFilters = localFilters.filter((f) => f.id !== id);
-    persistLocal();
+    persistLocalOrToast();
 
     const serverRecord: SavedFilterRecord = {
       id: result.filter.id,
@@ -135,7 +163,9 @@ function createSavedFilterStore(): SavedFilterStore {
       shared: false,
     };
     localFilters = [localRecord, ...localFilters];
-    persistLocal();
+    // The server unshare has already happened, so the private copy stays
+    // in the list for this session even when the write fails.
+    persistLocalOrToast();
   }
 
   async function removeShared(id: string): Promise<void> {
@@ -146,6 +176,42 @@ function createSavedFilterStore(): SavedFilterStore {
         filterId: id,
       });
       sharedFilters = sharedFilters.filter((f) => f.id !== id);
+    }
+  }
+
+  async function loadShared(orgKeyManager: OrgKeyManager): Promise<void> {
+    sharedLoadKeyMgr = orgKeyManager;
+    try {
+      const result = await requireRouter(
+        trpc.savedFilters,
+        "savedFilters",
+      ).list.query();
+      const decoded: SavedFilterRecord[] = [];
+      for (const f of result.filters) {
+        let state: string;
+        try {
+          state = await orgKeyManager.decryptText(f.encryptedState);
+        } catch {
+          // Cannot decrypt (key rotation in progress, etc.). Skip.
+          continue;
+        }
+        decoded.push({
+          id: f.id,
+          encryptedName: f.encryptedName,
+          state,
+          color: savedFilterColorSchema.parse(f.color),
+          icon: f.icon,
+          shared: true,
+          ownerId: f.ownerId,
+          createdAt: f.createdAt,
+        });
+      }
+      sharedFilters = decoded;
+      sharedLoadFailed = false;
+    } catch (err: unknown) {
+      // Without VIEW_CASES the server answers FORBIDDEN and the shared
+      // section stays absent. Any other failure is shown as retryable.
+      sharedLoadFailed = !hasTrpcErrorCode(err, "FORBIDDEN");
     }
   }
 
@@ -160,15 +226,20 @@ function createSavedFilterStore(): SavedFilterStore {
     },
 
     add(record: SavedFilterRecord): void {
-      localFilters = [record, ...localFilters];
-      persistLocal();
+      const next = [record, ...localFilters];
+      if (!saveToStorage(next)) throw new SavedFilterStorageError();
+      localFilters = next;
     },
 
     remove(id: string): void {
       const isLocal = localFilters.some((f) => f.id === id);
       if (isLocal) {
-        localFilters = localFilters.filter((f) => f.id !== id);
-        persistLocal();
+        const next = localFilters.filter((f) => f.id !== id);
+        if (!saveToStorage(next)) {
+          toastStore.show(m.saved_filter_delete_failed());
+          return;
+        }
+        localFilters = next;
         return;
       }
       void removeShared(id);
@@ -187,43 +258,25 @@ function createSavedFilterStore(): SavedFilterStore {
     },
 
     async loadShared(orgKeyManager: OrgKeyManager): Promise<void> {
-      try {
-        const result = await requireRouter(
-          trpc.savedFilters,
-          "savedFilters",
-        ).list.query();
-        const decoded: SavedFilterRecord[] = [];
-        for (const f of result.filters) {
-          let state: string;
-          try {
-            state = await orgKeyManager.decryptText(f.encryptedState);
-          } catch {
-            // Cannot decrypt (key rotation in progress, etc.). Skip.
-            continue;
-          }
-          decoded.push({
-            id: f.id,
-            encryptedName: f.encryptedName,
-            state,
-            color: savedFilterColorSchema.parse(f.color),
-            icon: f.icon,
-            shared: true,
-            ownerId: f.ownerId,
-            createdAt: f.createdAt,
-          });
-        }
-        sharedFilters = decoded;
-      } catch {
-        // Network error or user lacks VIEW_CASES. Shared filters
-        // are supplementary; local filters still work.
-      }
+      await loadShared(orgKeyManager);
+    },
+
+    get sharedLoadFailed(): boolean {
+      return sharedLoadFailed;
+    },
+
+    async retryShared(): Promise<void> {
+      if (sharedLoadKeyMgr == null) return;
+      await loadShared(sharedLoadKeyMgr);
     },
 
     async resealNames(bridge: CryptoBridge): Promise<void> {
       const updated = await resealSavedFilterNames(bridge, localFilters);
+      // The resealed names are correct for this session; a failed write
+      // leaves the old ones on disk, which the next session reseals again.
       if (updated !== null) {
         localFilters = updated;
-        persistLocal();
+        persistLocalOrToast();
       }
     },
 

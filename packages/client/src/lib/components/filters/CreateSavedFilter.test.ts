@@ -8,7 +8,13 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/svelte";
 
 // --- Mock i18n ---
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
@@ -21,6 +27,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   saved_filter_preview_label: () => "Filters",
   saved_filter_save: () => "Save",
   saved_filter_save_label: () => "Save filter",
+  saved_filter_save_failed: () => "Could not save",
   shell_close: () => "Close",
 }));
 
@@ -57,7 +64,18 @@ vi.mock(
     }) satisfies typeof ShellPopupNS,
 );
 
+// --- Mock shell sheet: pass-through div that renders children ---
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
+        .default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
+
 import CreateSavedFilter from "./CreateSavedFilter.svelte";
+import { SavedFilterStorageError } from "$lib/errors.js";
 import {
   PICKER_COLORS,
   PICKER_ICONS,
@@ -66,6 +84,7 @@ import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
 import type * as ContextNS from "$lib/crypto/context.js";
 import type * as MessagesNS from "$lib/paraglide/messages.js";
 import type * as ShellPopupNS from "$lib/shell/ShellPopup.svelte";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
 
 describe("CreateSavedFilter", () => {
   beforeEach(() => {
@@ -120,5 +139,56 @@ describe("CreateSavedFilter", () => {
     });
     const saveBtn = screen.getByText("Save");
     expect(saveBtn).toHaveProperty("disabled", true);
+  });
+
+  it("stays open and shows an alert when the filter cannot be stored", async () => {
+    const ondismiss = vi.fn();
+    const onsave = vi.fn(() => {
+      throw new SavedFilterStorageError();
+    });
+    render(CreateSavedFilter, {
+      opened: true,
+      filterSummary: "new, active",
+      ondismiss,
+      onsave,
+    });
+    const input = screen.getByPlaceholderText<HTMLInputElement>(
+      "e.g. Urgent Housing",
+    );
+
+    await fireEvent.input(input, { target: { value: "My filter" } });
+    await fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toContain("Could not save");
+    });
+    expect(ondismiss).not.toHaveBeenCalled();
+    expect(input.value).toBe("My filter");
+  });
+
+  it("saves and dismisses when the filter is stored", async () => {
+    const ondismiss = vi.fn();
+    const onsave = vi.fn();
+    render(CreateSavedFilter, {
+      opened: true,
+      filterSummary: "new, active",
+      ondismiss,
+      onsave,
+    });
+    const input = screen.getByPlaceholderText("e.g. Urgent Housing");
+
+    await fireEvent.input(input, { target: { value: "My filter" } });
+    await fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => {
+      expect(onsave).toHaveBeenCalledTimes(1);
+      expect(onsave).toHaveBeenCalledWith({
+        encryptedName: "encrypted-text",
+        color: "blue",
+        icon: "tag",
+      });
+      expect(ondismiss).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
