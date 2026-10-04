@@ -1496,7 +1496,6 @@
   "ticket_call_error_no_phone": "No phone number on file for this {client}.",
   "exposure_hint_sms": "SMS is not encrypted. Your phone provider can read it. Keep sensitive details in the encrypted chat.",
   "exposure_hint_call": "This call routes through your phone provider. They can hear the call. Keep sensitive details in the encrypted chat.",
-  "exposure_hint_email": "Email is the easiest channel to fake. Anyone who controls the sender's mailbox, or pretends to, can send messages that look real. Verify anything important through another channel.",
   "exposure_hint_dismiss": "Got it",
   "call_indicator_label": "Call in progress",
   "onboarding_step_account": "Account",
