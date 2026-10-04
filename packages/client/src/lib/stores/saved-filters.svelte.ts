@@ -14,11 +14,11 @@
  *
  * Decryption of names happens at render time via OrgDecryptCache.
  *
- * A failed localStorage write never passes silently. `add` leaves the list
- * unchanged and throws SavedFilterStorageError for the create sheet to
- * show. Removing a private filter rolls back and raises a toast. Share,
- * unshare and reseal have already changed server or key state that cannot
- * be undone, so they keep the new state for the session and raise a toast.
+ * A failed localStorage write never passes silently. Every such path
+ * throws SavedFilterStorageError for the caller to show. `add` and
+ * removing a private filter leave the list unchanged. Share, unshare and
+ * reseal have already changed server or key state that cannot be undone,
+ * so they keep the new state for the session and then throw.
  */
 
 import {
@@ -36,8 +36,6 @@ import {
   hasTrpcErrorCode,
 } from "$lib/errors.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
-import { toastStore } from "$lib/stores/toast.svelte.js";
-import * as m from "$lib/paraglide/messages.js";
 
 export type { SavedFilterState };
 
@@ -75,16 +73,17 @@ export interface SavedFilterStore {
   readonly filters: SavedFilterRecord[];
   /** Add a private filter. Throws SavedFilterStorageError, leaving the list unchanged, when the write fails. */
   add(record: SavedFilterRecord): void;
-  /** Remove a filter (local or shared). Async for shared filters. */
-  remove(id: string): void;
-  /** Toggle sharing on a filter. Share posts to server, unshare deletes. */
-  toggleShare(id: string): void;
+  /** Remove a filter (local or shared). Throws SavedFilterStorageError, leaving the list unchanged, when a private filter's removal cannot be written. */
+  remove(id: string): Promise<void>;
+  /** Toggle sharing on a filter. Share posts to server, unshare deletes. Throws SavedFilterStorageError when the device write fails after the server change, keeping the new state for the session. */
+  toggleShare(id: string): Promise<void>;
   /** Fetch shared filters from the server and decrypt their state. */
   loadShared(orgKeyManager: OrgKeyManager): Promise<void>;
   /** True when the last shared-filter fetch failed for a reason other than missing permission. */
   readonly sharedLoadFailed: boolean;
   /** Re-run the shared-filter fetch with the key manager from the last loadShared call. */
   retryShared(): Promise<void>;
+  /** Reseal private filter names under the current org key. Throws SavedFilterStorageError when the write fails, keeping the resealed names for the session. */
   resealNames(bridge: CryptoBridge): Promise<void>;
   readonly count: number;
   /** Set context needed for share/unshare/delete operations. */
@@ -99,11 +98,9 @@ function createSavedFilterStore(): SavedFilterStore {
   let sharedLoadFailed = $state(false);
   let sharedLoadKeyMgr: OrgKeyManager | null = null;
 
-  /** Persist private filters; on failure tell the account with a toast. */
-  function persistLocalOrToast(): void {
-    if (!saveToStorage(localFilters)) {
-      toastStore.show(m.saved_filter_save_failed());
-    }
+  /** Persist private filters. Throws SavedFilterStorageError when storage refuses the write. */
+  function persistLocalOrThrow(): void {
+    if (!saveToStorage(localFilters)) throw new SavedFilterStorageError();
   }
 
   function mergedFilters(): SavedFilterRecord[] {
@@ -129,11 +126,7 @@ function createSavedFilterStore(): SavedFilterStore {
       icon: local.icon,
     });
 
-    // The server share has succeeded and cannot be undone here. If the
-    // local removal does not persist, the private copy returns on reload
-    // beside the shared one; the toast says the device write failed.
     localFilters = localFilters.filter((f) => f.id !== id);
-    persistLocalOrToast();
 
     const serverRecord: SavedFilterRecord = {
       id: result.filter.id,
@@ -146,6 +139,11 @@ function createSavedFilterStore(): SavedFilterStore {
       createdAt: result.filter.createdAt,
     };
     sharedFilters = [...sharedFilters, serverRecord];
+    // The server share has succeeded and cannot be undone here. If the
+    // local removal does not persist, the private copy returns on reload
+    // beside the shared one. The throw tells the caller the device write
+    // failed.
+    persistLocalOrThrow();
   }
 
   async function unshareFilter(id: string): Promise<void> {
@@ -165,7 +163,7 @@ function createSavedFilterStore(): SavedFilterStore {
     localFilters = [localRecord, ...localFilters];
     // The server unshare has already happened, so the private copy stays
     // in the list for this session even when the write fails.
-    persistLocalOrToast();
+    persistLocalOrThrow();
   }
 
   async function removeShared(id: string): Promise<void> {
@@ -231,29 +229,26 @@ function createSavedFilterStore(): SavedFilterStore {
       localFilters = next;
     },
 
-    remove(id: string): void {
+    async remove(id: string): Promise<void> {
       const isLocal = localFilters.some((f) => f.id === id);
       if (isLocal) {
         const next = localFilters.filter((f) => f.id !== id);
-        if (!saveToStorage(next)) {
-          toastStore.show(m.saved_filter_delete_failed());
-          return;
-        }
+        if (!saveToStorage(next)) throw new SavedFilterStorageError();
         localFilters = next;
         return;
       }
-      void removeShared(id);
+      await removeShared(id);
     },
 
-    toggleShare(id: string): void {
+    async toggleShare(id: string): Promise<void> {
       const all = mergedFilters();
       const target = all.find((f) => f.id === id);
       if (target == null) return;
 
       if (target.shared) {
-        void unshareFilter(id);
+        await unshareFilter(id);
       } else {
-        void shareFilter(id);
+        await shareFilter(id);
       }
     },
 
@@ -276,7 +271,7 @@ function createSavedFilterStore(): SavedFilterStore {
       // leaves the old ones on disk, which the next session reseals again.
       if (updated !== null) {
         localFilters = updated;
-        persistLocalOrToast();
+        persistLocalOrThrow();
       }
     },
 

@@ -2,18 +2,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import type * as TrpcNS from "$lib/trpc/index.js";
-import type * as ToastNS from "$lib/stores/toast.svelte.js";
 import type * as ResealNS from "./saved-filter-reseal.js";
-import * as m from "$lib/paraglide/messages.js";
 
-const { mockToastShow, mockReseal } = vi.hoisted(() => ({
-  mockToastShow: vi.fn(),
+const { mockReseal } = vi.hoisted(() => ({
   mockReseal: vi.fn().mockResolvedValue(null),
-}));
-
-vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof ToastNS>()),
-  toastStore: { show: mockToastShow, dismiss: vi.fn(), current: null },
 }));
 
 vi.mock("./saved-filter-reseal.js", async (importOriginal) => ({
@@ -49,7 +41,6 @@ describe("savedFilterStore", () => {
   beforeEach(() => {
     vi.resetModules();
     localStorage.clear();
-    mockToastShow.mockClear();
   });
 
   async function getStore() {
@@ -154,7 +145,7 @@ describe("savedFilterStore", () => {
       const record = makeSavedFilter();
       store.add(record);
 
-      store.remove(record.id);
+      await store.remove(record.id);
 
       expect(store.count).toBe(0);
     });
@@ -163,11 +154,31 @@ describe("savedFilterStore", () => {
       const store = await getStore();
       const record = makeSavedFilter();
       store.add(record);
-      store.remove(record.id);
+      await store.remove(record.id);
 
       const stored = localStorage.getItem("care-y:saved-filters");
       const parsed = JSON.parse(stored!) as unknown[];
       expect(parsed).toHaveLength(0);
+    });
+  });
+
+  describe("remove (shared)", () => {
+    it("awaits the server unshare of an owned shared filter", async () => {
+      const store = await getStore();
+      const { trpc } = await import("$lib/trpc/index.js");
+      const mgr = makeOrgKeyMgr();
+      vi.mocked(trpc.savedFilters!.list.query).mockResolvedValueOnce({
+        filters: [makeServerFilter({ id: "server-1", ownerId: "user-1" })],
+      });
+      await store.loadShared(mgr as never);
+      store.setContext("user-1", mgr as never);
+
+      await store.remove("server-1");
+
+      expect(trpc.savedFilters!.unshare.mutate).toHaveBeenCalledWith({
+        filterId: "server-1",
+      });
+      expect(store.count).toBe(0);
     });
   });
 
@@ -178,7 +189,7 @@ describe("savedFilterStore", () => {
       store.add(record);
 
       // No setContext call, so toggleShare cannot reach the server.
-      store.toggleShare(record.id);
+      await store.toggleShare(record.id);
 
       // Filter stays local and unchanged.
       expect(store.filters[0]?.shared).toBe(false);
@@ -338,48 +349,47 @@ describe("savedFilterStore", () => {
       }
     });
 
-    it("remove of a local filter rolls back and raises a toast", async () => {
+    it("remove of a local filter rolls back and throws", async () => {
       const store = await getStore();
+      const { SavedFilterStorageError } = await import("$lib/errors.js");
       const record = makeSavedFilter();
       store.add(record);
       const setItem = failStorageWrites();
       try {
-        store.remove(record.id);
+        await expect(store.remove(record.id)).rejects.toThrow(
+          SavedFilterStorageError,
+        );
         expect(store.count).toBe(1);
         expect(store.filters[0]?.id).toBe(record.id);
-        expect(mockToastShow).toHaveBeenCalledWith(
-          m.saved_filter_delete_failed(),
-        );
       } finally {
         setItem.mockRestore();
       }
     });
 
-    it("share keeps the server record and raises a toast", async () => {
+    it("share keeps the server record and throws", async () => {
       const store = await getStore();
       const { trpc } = await import("$lib/trpc/index.js");
+      const { SavedFilterStorageError } = await import("$lib/errors.js");
       store.setContext("user-1", makeOrgKeyMgr() as never);
       const record = makeSavedFilter({ ownerId: "user-1" });
       store.add(record);
       const setItem = failStorageWrites();
       try {
-        store.toggleShare(record.id);
-        await vi.waitFor(() => {
-          expect(trpc.savedFilters!.share.mutate).toHaveBeenCalled();
-          expect(store.filters.map((f) => f.id)).toEqual(["server-id-1"]);
-          expect(store.filters[0]?.shared).toBe(true);
-          expect(mockToastShow).toHaveBeenCalledWith(
-            m.saved_filter_save_failed(),
-          );
-        });
+        await expect(store.toggleShare(record.id)).rejects.toThrow(
+          SavedFilterStorageError,
+        );
+        expect(trpc.savedFilters!.share.mutate).toHaveBeenCalled();
+        expect(store.filters.map((f) => f.id)).toEqual(["server-id-1"]);
+        expect(store.filters[0]?.shared).toBe(true);
       } finally {
         setItem.mockRestore();
       }
     });
 
-    it("unshare keeps the private copy and raises a toast", async () => {
+    it("unshare keeps the private copy and throws", async () => {
       const store = await getStore();
       const { trpc } = await import("$lib/trpc/index.js");
+      const { SavedFilterStorageError } = await import("$lib/errors.js");
       const mgr = makeOrgKeyMgr();
       vi.mocked(trpc.savedFilters!.list.query).mockResolvedValueOnce({
         filters: [makeServerFilter({ id: "server-1", ownerId: "user-1" })],
@@ -388,34 +398,31 @@ describe("savedFilterStore", () => {
       store.setContext("user-1", mgr as never);
       const setItem = failStorageWrites();
       try {
-        store.toggleShare("server-1");
-        await vi.waitFor(() => {
-          expect(trpc.savedFilters!.unshare.mutate).toHaveBeenCalledWith({
-            filterId: "server-1",
-          });
-          expect(store.count).toBe(1);
-          expect(store.filters[0]?.shared).toBe(false);
-          expect(mockToastShow).toHaveBeenCalledWith(
-            m.saved_filter_save_failed(),
-          );
+        await expect(store.toggleShare("server-1")).rejects.toThrow(
+          SavedFilterStorageError,
+        );
+        expect(trpc.savedFilters!.unshare.mutate).toHaveBeenCalledWith({
+          filterId: "server-1",
         });
+        expect(store.count).toBe(1);
+        expect(store.filters[0]?.shared).toBe(false);
       } finally {
         setItem.mockRestore();
       }
     });
 
-    it("resealNames keeps the resealed names and raises a toast", async () => {
+    it("resealNames keeps the resealed names and throws", async () => {
       const store = await getStore();
+      const { SavedFilterStorageError } = await import("$lib/errors.js");
       const record = makeSavedFilter();
       store.add(record);
       mockReseal.mockResolvedValueOnce([{ ...record, encryptedName: "bmV3" }]);
       const setItem = failStorageWrites();
       try {
-        await store.resealNames({} as never);
-        expect(store.filters[0]?.encryptedName).toBe("bmV3");
-        expect(mockToastShow).toHaveBeenCalledWith(
-          m.saved_filter_save_failed(),
+        await expect(store.resealNames({} as never)).rejects.toThrow(
+          SavedFilterStorageError,
         );
+        expect(store.filters[0]?.encryptedName).toBe("bmV3");
       } finally {
         setItem.mockRestore();
       }

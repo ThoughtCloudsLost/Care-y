@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   createFilterDispatch,
   filterBarHandlers,
@@ -6,6 +6,15 @@ import {
 } from "./create-filter-dispatch.svelte.js";
 import type { SavedFilterRecord } from "@care-y/shared";
 import { SavedFilterStorageError } from "$lib/errors.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import { toastStore } from "$lib/stores/toast.svelte.js";
+import * as m from "$lib/paraglide/messages.js";
+
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 function makeRecord(overrides?: Partial<SavedFilterRecord>): SavedFilterRecord {
   return {
@@ -235,6 +244,10 @@ describe("createFilterDispatch", () => {
   });
 
   describe("saved filters", () => {
+    beforeEach(() => {
+      vi.mocked(toastStore.show).mockClear();
+    });
+
     function makeSavedConfig(): FilterDispatchConfig {
       return makeConfig({
         savedFilters: {
@@ -279,24 +292,78 @@ describe("createFilterDispatch", () => {
       expect(cfg.savedFilters!.applyState).not.toHaveBeenCalled();
     });
 
-    it("deletes a saved filter", () => {
+    it("deletes a saved filter", async () => {
       const cfg = makeSavedConfig();
       const d = createFilterDispatch(cfg);
 
-      d.handleSavedFilterDelete("filter-1");
+      await d.handleSavedFilterDelete("filter-1");
 
       expect(cfg.savedFilters!.store.remove).toHaveBeenCalledWith("filter-1");
     });
 
-    it("toggles share on a saved filter", () => {
+    it("toggles share on a saved filter", async () => {
       const cfg = makeSavedConfig();
       const d = createFilterDispatch(cfg);
 
-      d.handleSavedFilterToggleShare("filter-1");
+      await d.handleSavedFilterToggleShare("filter-1");
 
       expect(cfg.savedFilters!.store.toggleShare).toHaveBeenCalledWith(
         "filter-1",
       );
+    });
+
+    it("shows the delete-failed toast when the store throws SavedFilterStorageError", async () => {
+      const cfg = makeSavedConfig();
+      vi.mocked(cfg.savedFilters!.store.remove).mockRejectedValue(
+        new SavedFilterStorageError(),
+      );
+      const d = createFilterDispatch(cfg);
+
+      await d.handleSavedFilterDelete("filter-1");
+
+      expect(toastStore.show).toHaveBeenCalledWith(
+        m.saved_filter_delete_failed(),
+      );
+    });
+
+    it("shows the save-failed toast when toggleShare throws SavedFilterStorageError", async () => {
+      const cfg = makeSavedConfig();
+      vi.mocked(cfg.savedFilters!.store.toggleShare).mockImplementation(() => {
+        throw new SavedFilterStorageError();
+      });
+      const d = createFilterDispatch(cfg);
+
+      await d.handleSavedFilterToggleShare("filter-1");
+
+      expect(toastStore.show).toHaveBeenCalledWith(
+        m.saved_filter_save_failed(),
+      );
+    });
+
+    it("rethrows any other error from remove without a toast", async () => {
+      const cfg = makeSavedConfig();
+      vi.mocked(cfg.savedFilters!.store.remove).mockRejectedValue(
+        new TypeError("boom"),
+      );
+      const d = createFilterDispatch(cfg);
+
+      await expect(d.handleSavedFilterDelete("filter-1")).rejects.toThrow(
+        TypeError,
+      );
+      expect(toastStore.show).not.toHaveBeenCalled();
+    });
+
+    it("rethrows any other error from toggleShare without a toast", async () => {
+      const cfg = makeSavedConfig();
+      vi.mocked(cfg.savedFilters!.store.toggleShare).mockRejectedValue(
+        new TypeError("boom"),
+      );
+      const d = createFilterDispatch(cfg);
+
+      await expect(d.handleSavedFilterToggleShare("filter-1")).rejects.toThrow(
+        TypeError,
+      );
+      expect(toastStore.show).not.toHaveBeenCalled();
     });
 
     it("creates a saved filter record and adds to store", () => {
@@ -346,18 +413,16 @@ describe("createFilterDispatch", () => {
       ).toThrow("savedFilters config required");
     });
 
-    it("is a no-op for apply/delete/toggleShare without config", () => {
+    it("is a no-op for apply/delete/toggleShare without config", async () => {
       const d = createFilterDispatch(makeConfig());
 
       expect(() => {
         d.handleSavedFilterApply(makeRecord());
       }).not.toThrow();
-      expect(() => {
-        d.handleSavedFilterDelete("id");
-      }).not.toThrow();
-      expect(() => {
-        d.handleSavedFilterToggleShare("id");
-      }).not.toThrow();
+      await expect(d.handleSavedFilterDelete("id")).resolves.toBeUndefined();
+      await expect(
+        d.handleSavedFilterToggleShare("id"),
+      ).resolves.toBeUndefined();
     });
   });
 });

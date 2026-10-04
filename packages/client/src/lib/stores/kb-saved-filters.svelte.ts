@@ -9,10 +9,10 @@
  *
  * localStorage key: "care-y:kb-saved-filters"
  *
- * A failed localStorage write never passes silently: `add` throws
- * SavedFilterStorageError and leaves the list unchanged, remove and
- * toggleShare roll back and raise a toast, and reseal keeps the resealed
- * names for the session and raises a toast.
+ * A failed localStorage write never passes silently. `add`, `remove` and
+ * `toggleShare` throw SavedFilterStorageError and leave the list
+ * unchanged. Reseal keeps the resealed names for the session and then
+ * throws.
  */
 
 import {
@@ -23,8 +23,6 @@ import {
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { resealSavedFilterNames } from "./saved-filter-reseal.js";
 import { SavedFilterStorageError } from "$lib/errors.js";
-import { toastStore } from "$lib/stores/toast.svelte.js";
-import * as m from "$lib/paraglide/messages.js";
 
 export type { KbSavedFilterState } from "@care-y/shared";
 
@@ -72,8 +70,11 @@ function createKbSavedFilterStore(): {
   readonly filters: SavedFilterRecord[];
   /** Add a private filter. Throws SavedFilterStorageError, leaving the list unchanged, when the write fails. */
   add(record: SavedFilterRecord): void;
+  /** Remove a filter. Throws SavedFilterStorageError, leaving the list unchanged, when the write fails. */
   remove(id: string): void;
+  /** Toggle the shared flag. Throws SavedFilterStorageError, leaving the list unchanged, when the write fails. */
   toggleShare(id: string): void;
+  /** Reseal filter names under the current org key. Throws SavedFilterStorageError when the write fails, keeping the resealed names for the session. */
   resealNames(bridge: CryptoBridge): Promise<void>;
   readonly count: number;
 } {
@@ -92,10 +93,7 @@ function createKbSavedFilterStore(): {
 
     remove(id: string): void {
       const next = filters.filter((f) => f.id !== id);
-      if (!saveToStorage(next)) {
-        toastStore.show(m.saved_filter_delete_failed());
-        return;
-      }
+      if (!saveToStorage(next)) throw new SavedFilterStorageError();
       filters = next;
     },
 
@@ -103,10 +101,7 @@ function createKbSavedFilterStore(): {
       const next = filters.map((f) =>
         f.id === id ? { ...f, shared: !f.shared } : f,
       );
-      if (!saveToStorage(next)) {
-        toastStore.show(m.saved_filter_save_failed());
-        return;
-      }
+      if (!saveToStorage(next)) throw new SavedFilterStorageError();
       filters = next;
     },
 
@@ -116,9 +111,7 @@ function createKbSavedFilterStore(): {
         // Correct for this session; the next session reseals the old
         // names again.
         filters = updated;
-        if (!saveToStorage(filters)) {
-          toastStore.show(m.saved_filter_save_failed());
-        }
+        if (!saveToStorage(filters)) throw new SavedFilterStorageError();
       }
     },
 

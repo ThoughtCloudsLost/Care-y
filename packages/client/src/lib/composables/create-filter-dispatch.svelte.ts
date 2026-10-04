@@ -1,5 +1,7 @@
 import type { SavedFilterColor, SavedFilterRecord } from "@care-y/shared";
-import { ClientError } from "$lib/errors.js";
+import { ClientError, SavedFilterStorageError } from "$lib/errors.js";
+import { toastStore } from "$lib/stores/toast.svelte.js";
+import * as m from "$lib/paraglide/messages.js";
 
 // ── Field definitions (discriminated union) ──
 
@@ -38,8 +40,8 @@ interface SafeParseResult {
 interface SavedFilterDispatchConfig {
   readonly store: {
     readonly add: (record: SavedFilterRecord) => void;
-    readonly remove: (id: string) => void;
-    readonly toggleShare: (id: string) => void;
+    readonly remove: (id: string) => void | Promise<void>;
+    readonly toggleShare: (id: string) => void | Promise<void>;
   };
   readonly captureState: () => unknown;
   readonly applyState: (state: unknown) => void;
@@ -72,8 +74,8 @@ export interface FilterDispatch {
   readonly handleSortChange: (field: string, dir: "asc" | "desc") => void;
   readonly clearAll: (options?: ClearAllOptions) => void;
   readonly handleSavedFilterApply: (record: SavedFilterRecord) => void;
-  readonly handleSavedFilterDelete: (id: string) => void;
-  readonly handleSavedFilterToggleShare: (id: string) => void;
+  readonly handleSavedFilterDelete: (id: string) => Promise<void>;
+  readonly handleSavedFilterToggleShare: (id: string) => Promise<void>;
   readonly handleCreateSavedFilter: (meta: {
     encryptedName: string;
     color: SavedFilterColor;
@@ -148,12 +150,26 @@ export function createFilterDispatch(
     }
   }
 
-  function handleSavedFilterDelete(id: string): void {
-    config.savedFilters?.store.remove(id);
+  async function handleSavedFilterDelete(id: string): Promise<void> {
+    const sf = config.savedFilters;
+    if (sf == null) return;
+    try {
+      await sf.store.remove(id);
+    } catch (err: unknown) {
+      if (!(err instanceof SavedFilterStorageError)) throw err;
+      toastStore.show(m.saved_filter_delete_failed());
+    }
   }
 
-  function handleSavedFilterToggleShare(id: string): void {
-    config.savedFilters?.store.toggleShare(id);
+  async function handleSavedFilterToggleShare(id: string): Promise<void> {
+    const sf = config.savedFilters;
+    if (sf == null) return;
+    try {
+      await sf.store.toggleShare(id);
+    } catch (err: unknown) {
+      if (!(err instanceof SavedFilterStorageError)) throw err;
+      toastStore.show(m.saved_filter_save_failed());
+    }
   }
 
   function handleCreateSavedFilter(meta: {

@@ -176,7 +176,9 @@ export class SeedReplayError extends ClientError {
 /**
  * A saved filter could not be written to this device's localStorage
  * (storage full, or unavailable as in some private browsing modes).
- * The store leaves its state as it was before the write.
+ * The store leaves its state as it was before the write, except where
+ * server or key state has already changed; then it keeps the new state
+ * for the session.
  */
 export class SavedFilterStorageError extends ClientError {
   constructor() {

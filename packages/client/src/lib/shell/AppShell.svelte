@@ -65,6 +65,7 @@
   import DesktopSidebar from "./DesktopSidebar.svelte";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
+  import { SavedFilterStorageError } from "$lib/errors.js";
   import { resealSweep } from "$lib/crypto/reseal-sweep.svelte.js";
   import { checkWrapBackfills } from "$lib/crypto/wrap-backfill-sweep.svelte.js";
   import Register from "$lib/components/Register.svelte";
@@ -1074,6 +1075,12 @@
   });
 
   // ── Device-local saved-filter name reseal (all users) ──────────────
+  /** The resealed names stay for this session; say the device write failed. */
+  function showResealWriteFailure(err: unknown): void {
+    if (!(err instanceof SavedFilterStorageError)) throw err;
+    toastStore.show(m.saved_filter_save_failed());
+  }
+
   let _filterResealDone = false;
 
   $effect(() => {
@@ -1082,8 +1089,8 @@
     if (_filterResealDone) return;
     _filterResealDone = true;
     const bridge = getCryptoBridge();
-    void savedFilterStore.resealNames(bridge);
-    void kbSavedFilterStore.resealNames(bridge);
+    void savedFilterStore.resealNames(bridge).catch(showResealWriteFailure);
+    void kbSavedFilterStore.resealNames(bridge).catch(showResealWriteFailure);
   });
 
   // ── Shared saved-filter fetch (all users with VIEW_CASES) ──────────
