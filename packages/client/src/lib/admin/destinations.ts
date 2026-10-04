@@ -30,6 +30,7 @@ import {
   ClipboardList,
   HandCoins,
   ReceiptText,
+  ShieldCheck,
 } from "@lucide/svelte";
 
 export type AdminGroup =
@@ -44,12 +45,6 @@ export interface AdminDestination {
   readonly path: string;
   readonly permission: Permission;
   readonly implemented: boolean;
-  /**
-   * Declares admission only; renders no hub tile. Lets a surface without
-   * a tile (the roles tab) keep its admission rule in this registry so
-   * canEnterAdminRoute remains the single source.
-   */
-  readonly hidden?: true;
 }
 
 export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
@@ -83,6 +78,16 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     subtitle: () => m.admin_clients_subtitle(withTerms()),
     path: "/admin/people?tab=clients",
     permission: Permission.VIEW_CLIENTS,
+    implemented: true,
+  },
+  {
+    id: "roles",
+    group: "people",
+    icon: ShieldCheck,
+    label: m.admin_tab_roles,
+    subtitle: m.hub_roles_subtitle,
+    path: "/admin/people?tab=roles",
+    permission: Permission.MANAGE_ROLES,
     implemented: true,
   },
 
@@ -291,19 +296,6 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     permission: Permission.AUDIT_FUNDS,
     implemented: true,
   },
-
-  // HIDDEN (admission declarations without hub tiles)
-  {
-    id: "roles",
-    group: "people",
-    icon: Users,
-    label: m.admin_tab_roles,
-    subtitle: m.admin_tab_roles,
-    path: "/admin/people?tab=roles",
-    permission: Permission.MANAGE_ROLES,
-    implemented: true,
-    hidden: true,
-  },
 ];
 
 export const GROUP_ORDER: readonly AdminGroup[] = [
@@ -316,9 +308,43 @@ export const GROUP_ORDER: readonly AdminGroup[] = [
 export function getVisibleDestinations(
   permissions: ReadonlySet<Permission>,
 ): readonly AdminDestination[] {
-  return ADMIN_DESTINATIONS.filter(
-    (d) => d.hidden !== true && permissions.has(d.permission),
+  return ADMIN_DESTINATIONS.filter((d) => permissions.has(d.permission));
+}
+
+/**
+ * Whether the permissions set can enter the admin hub: true when at least
+ * one hub tile is visible. The hub gate and the desktop sidebar's Admin
+ * entry both read this, so the entry is shown to exactly the accounts the
+ * hub admits.
+ */
+export function canEnterAdminHub(
+  permissions: ReadonlySet<Permission>,
+): boolean {
+  return getVisibleDestinations(permissions).length > 0;
+}
+
+/** Admin groups whose destinations all open one page. */
+export type SidebarAdminGroup = Exclude<AdminGroup, "analytics">;
+
+// Sidebar order. Analytics rows open several pages (logs, funds) and are
+// reached from the hub.
+const SIDEBAR_ADMIN_GROUPS: readonly SidebarAdminGroup[] = [
+  "people",
+  "organization",
+  "communications",
+];
+
+/**
+ * The one-page admin groups in which the permissions set has at least one
+ * visible destination, in sidebar order.
+ */
+export function getSidebarAdminGroups(
+  permissions: ReadonlySet<Permission>,
+): readonly SidebarAdminGroup[] {
+  const visibleGroups = new Set<AdminGroup>(
+    getVisibleDestinations(permissions).map((d) => d.group),
   );
+  return SIDEBAR_ADMIN_GROUPS.filter((g) => visibleGroups.has(g));
 }
 
 /**

@@ -65,7 +65,6 @@ export function defaultTab(permissions: ReadonlySet<Permission>): PeopleTab {
     return "queues";
   if (canEnterAdminRoute(permissions, "/admin/people?tab=clients"))
     return "clients";
-  // The roles tab has no destination tile; keep its explicit gate.
   if (canEnterAdminRoute(permissions, "/admin/people?tab=roles"))
     return "roles";
   return "queues";

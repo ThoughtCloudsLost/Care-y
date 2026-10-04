@@ -823,6 +823,7 @@
   "panel_settings": "Settings",
   "panel_logout": "Log out",
   "hub_users_subtitle": "Manage users, roles, and invitations",
+  "hub_roles_subtitle": "Permissions for each role",
   "hub_queues_subtitle": "Create and assign {ticket} {queues}",
   "hub_telephony_subtitle": "Phone numbers and call routing",
   "hub_blocklist_subtitle": "Blocked numbers",
