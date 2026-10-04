@@ -79,6 +79,7 @@
   "library_vote_removed": "Voto eliminado",
   "library_article_info": "Información del artículo",
   "library_article_list_empty": "Estado de la lista de artículos",
+  "library_article_load_failed": "No se pudo cargar este artículo.",
   "library_editor_toolbar": "Barra de herramientas del editor",
   "library_editor_bold": "Negrita",
   "library_editor_italic": "Cursiva",

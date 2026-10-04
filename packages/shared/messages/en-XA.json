@@ -79,6 +79,7 @@
   "library_vote_removed": "⟦Vòtè rèmòvèd ••••⟧",
   "library_article_info": "⟦Àrtìclè ìnfòrmàtìòn ••••••⟧",
   "library_article_list_empty": "⟦Àrtìclè lìst stàtùs ••••••⟧",
+  "library_article_load_failed": "⟦Thìs àrtìclè còùld nòt bè lòàdèd. ••••••••••⟧",
   "library_editor_toolbar": "⟦Èdìtòr tòòlbàr •••••⟧",
   "library_editor_bold": "⟦Bòld ••⟧",
   "library_editor_italic": "⟦Ìtàlìc ••⟧",

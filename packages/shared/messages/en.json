@@ -79,6 +79,7 @@
   "library_vote_removed": "Vote removed",
   "library_article_info": "Article information",
   "library_article_list_empty": "Article list status",
+  "library_article_load_failed": "This article could not be loaded.",
   "library_editor_toolbar": "Editor toolbar",
   "library_editor_bold": "Bold",
   "library_editor_italic": "Italic",
