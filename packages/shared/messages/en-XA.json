@@ -2703,6 +2703,7 @@
   "admin_funds_updated": "⟦Fùnd ùpdàtèd ••••⟧",
   "admin_funds_deactivated": "⟦Fùnd dèàctìvàtèd •••••⟧",
   "admin_funds_reactivated": "⟦Fùnd rèàctìvàtèd •••••⟧",
+  "admin_funds_created_on": "⟦Crèàtèd  •••{date}⟧",
   "admin_funds_record_adjustment": "⟦Rècòrd àdjùstmènt ••••••⟧",
   "admin_funds_adjustment_hint": "⟦Àdd mònèy còllèctèd òùtsìdè thè àpp, sùch às à wèbsìtè dònàtìòn, òr tàkè mònèy òùt tò còrrèct à bàlàncè. ••••••••••••••••••••••••••••••••⟧",
   "admin_funds_adjustment_direction": "⟦Dìrèctìòn •••⟧",

@@ -57,6 +57,7 @@ function fund(
     isActive: true,
     sortOrder: 0,
     orgKeyGeneration: 1,
+    createdAt: "2026-09-01T12:00:00.000Z",
     balance: balanceMinor === null ? null : { balanceMinor, version: 3 },
     raised: { kind: "unlinked" },
     available:

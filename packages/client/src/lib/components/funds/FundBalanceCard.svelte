@@ -2,7 +2,8 @@
   One fund's balance, as a card. Same anatomy as the dashboard queue
   tiles (hairline-bordered card, no shadow), without the button: the
   fund's ledger sits right below it on the audit page, so there is
-  nothing to open.
+  nothing to open. The foot of the card says the day the fund was
+  created, so the history below it has a visible start.
 
   The large figure is the fund's available figure, the one every other
   surface shows: the sealed running balance plus what a linked provider
@@ -20,6 +21,7 @@
   import type { LedgerTotals } from "$lib/funds/balances.js";
   import { isBelowZero } from "$lib/funds/balances.js";
   import { formatAmount } from "$lib/funds/fund-display.js";
+  import { formatShortDate } from "$lib/utils/time.js";
   import type {
     FundAvailable,
     FundRaised,
@@ -35,10 +37,18 @@
     totals: LedgerTotals | null;
     /** The linked provider fund's raised state. */
     raised: FundRaised;
+    /** ISO timestamp of the fund's creation; null while the fund loads. */
+    createdAt: string | null;
   }
 
-  let { name, currency, available, totals, raised }: FundBalanceCardProps =
-    $props();
+  let {
+    name,
+    currency,
+    available,
+    totals,
+    raised,
+    createdAt,
+  }: FundBalanceCardProps = $props();
 
   const belowZero = $derived(
     available.kind === "amount" && isBelowZero(available.minor),
@@ -99,6 +109,11 @@
       </span>
     </span>
   {/if}
+  {#if createdAt !== null}
+    <time class="fund-caption fund-created" datetime={createdAt}>
+      {m.admin_funds_created_on({ date: formatShortDate(createdAt) })}
+    </time>
+  {/if}
 </div>
 
 <style>
@@ -157,6 +172,11 @@
     margin: var(--space-xs) 0 0;
     padding-top: var(--space-xs);
     border-top: 1px solid var(--hair);
+  }
+
+  /* The day the fund began: its ledger, below the card, starts here. */
+  .fund-created {
+    margin-top: var(--space-xs);
   }
 
   .fund-line {

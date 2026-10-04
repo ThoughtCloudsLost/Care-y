@@ -2703,6 +2703,7 @@
   "admin_funds_updated": "Fondo actualizado",
   "admin_funds_deactivated": "Fondo desactivado",
   "admin_funds_reactivated": "Fondo reactivado",
+  "admin_funds_created_on": "Creado el {date}",
   "admin_funds_record_adjustment": "Registrar ajuste",
   "admin_funds_adjustment_hint": "Añade dinero recibido fuera de la app, como una donación por la web, o retira dinero para corregir un saldo.",
   "admin_funds_adjustment_direction": "Tipo de ajuste",

@@ -22,6 +22,7 @@ import {
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 import { formatAmount } from "$lib/funds/fund-display.js";
+import { formatShortDate } from "$lib/utils/time.js";
 import type { LedgerEntryView } from "$lib/funds/fund-store.svelte.js";
 import FundHistoryList from "./FundHistoryList.svelte";
 import type * as ErrorsNS from "$lib/errors.js";
@@ -195,6 +196,9 @@ describe("FundHistoryList", () => {
     });
     const time = container.querySelector("time");
     expect(time?.getAttribute("datetime")).toBe("2026-09-15T10:30:00.000Z");
+    expect(time?.textContent.trim()).toBe(
+      formatShortDate("2026-09-15T10:30:00.000Z"),
+    );
   });
 
   describe("case pointer", () => {
