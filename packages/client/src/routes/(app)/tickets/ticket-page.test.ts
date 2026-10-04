@@ -15,6 +15,7 @@
  *   - $lib/tickets/preview-loader.svelte.js: mock preview loader factory
  *   - $lib/stores/view-mode.svelte.js: controlled view mode state
  *   - $lib/stores/filters.svelte.js: controlled filter state
+ *   - $lib/search/deep-search.svelte.js: wrapped to capture the page's options
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -29,6 +30,7 @@ import type * as NavigationNS from "$app/navigation";
 import type * as PreviewLoaderNS from "$lib/tickets/preview-loader.svelte.js";
 import type * as ViewModeNS from "$lib/stores/view-mode.svelte.js";
 import type * as FiltersNS from "$lib/stores/filters.svelte.js";
+import type * as DeepSearchNS from "$lib/search/deep-search.svelte.js";
 import { getMockPermissions } from "$mocks/permissions.js";
 
 // --- Mocks ---
@@ -58,6 +60,9 @@ let sweepQueryData: unknown = undefined;
 let facetIndexData: { rows: unknown[]; complete: boolean } | undefined =
   undefined;
 
+// Controlled counts query data. undefined = pending.
+let countsQueryData: unknown = undefined;
+
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
@@ -75,6 +80,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     const key = opts.queryKey;
     const isSweep = Array.isArray(key) && key.includes("readStateSweep");
     const isFacetIndex = Array.isArray(key) && key.includes("facetIndex");
+    const isCounts = Array.isArray(key) && key.includes("counts");
     return {
       isLoading: false,
       isError: false,
@@ -83,7 +89,9 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
         ? sweepQueryData
         : isFacetIndex
           ? facetIndexData
-          : undefined,
+          : isCounts
+            ? countsQueryData
+            : undefined,
     };
   },
   createMutation: () => ({
@@ -249,16 +257,22 @@ vi.mock(
 // Controlled active-filter count (0 = truly empty, >0 = filtered view).
 let currentActiveCount = 0;
 
+const DEFAULT_SERVER_PARAMS = {
+  sortBy: "date",
+  sortDirection: "desc",
+  limit: 50,
+};
+// Controlled server params (server-side filters the page sends).
+let currentServerParams: Record<string, unknown> = DEFAULT_SERVER_PARAMS;
+
 vi.mock(
   "$lib/stores/filters.svelte.js",
   async (importOriginal) =>
     ({
       ...(await importOriginal<typeof FiltersNS>()),
       filterStore: {
-        serverParams: {
-          sortBy: "date",
-          sortDirection: "desc",
-          limit: 50,
+        get serverParams() {
+          return currentServerParams;
         },
         sort: { field: "date", direction: "desc" },
         needsDisplayStatusPostFilter: false,
@@ -284,6 +298,23 @@ vi.mock(
       } as unknown as typeof FiltersNS.filterStore,
     }) satisfies typeof FiltersNS,
 );
+
+// The page's deep search options, captured so a test can read what
+// total the page hands the stopped line.
+let capturedDeepSearchOptions: DeepSearchNS.DeepSearchOptions | undefined;
+
+vi.mock("$lib/search/deep-search.svelte.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof DeepSearchNS>();
+  return {
+    ...actual,
+    createDeepSearch: (
+      options: DeepSearchNS.DeepSearchOptions,
+    ): DeepSearchNS.DeepSearch => {
+      capturedDeepSearchOptions = options;
+      return actual.createDeepSearch(options);
+    },
+  } satisfies typeof DeepSearchNS;
+});
 
 // --- Helpers ---
 
@@ -364,6 +395,9 @@ beforeEach(() => {
   sweepQueryData = undefined;
   facetIndexData = undefined;
   currentActiveCount = 0;
+  countsQueryData = undefined;
+  currentServerParams = DEFAULT_SERVER_PARAMS;
+  capturedDeepSearchOptions = undefined;
 });
 
 afterEach(cleanup);
@@ -768,5 +802,49 @@ describe("Ticket list page", () => {
 
     const { container } = render(PageModule.default);
     expect(container.querySelector("[data-ticket-list]")).toBeTruthy();
+  });
+
+  describe("deep search total", () => {
+    it("keeps the counts total when only a client-only toggle is active", () => {
+      infiniteQueryState = {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: { pages: [[makeTicket()]], pageParams: [undefined] },
+        hasNextPage: false,
+        isFetchingNextPage: false,
+        fetchNextPage: vi.fn(),
+      };
+      countsQueryData = { new: 0, active: 0, onHold: 0, total: 40 };
+      currentActiveCount = 1;
+
+      render(PageModule.default);
+
+      expect(capturedDeepSearchOptions).toBeDefined();
+      expect(capturedDeepSearchOptions?.totalCount()).toBe(40);
+    });
+
+    it("withholds the counts total when a server filter narrows the list", () => {
+      infiniteQueryState = {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: { pages: [[makeTicket()]], pageParams: [undefined] },
+        hasNextPage: false,
+        isFetchingNextPage: false,
+        fetchNextPage: vi.fn(),
+      };
+      countsQueryData = { new: 0, active: 0, onHold: 0, total: 40 };
+      currentServerParams = {
+        ...DEFAULT_SERVER_PARAMS,
+        queueIds: ["queue-001"],
+      };
+      currentActiveCount = 1;
+
+      render(PageModule.default);
+
+      expect(capturedDeepSearchOptions).toBeDefined();
+      expect(capturedDeepSearchOptions?.totalCount()).toBeUndefined();
+    });
   });
 });

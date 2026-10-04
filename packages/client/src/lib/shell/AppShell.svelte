@@ -73,7 +73,11 @@
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
   import { canCall } from "$lib/auth/procedure-gates.js";
-  import { canEnterAdminRoute } from "$lib/admin/destinations.js";
+  import {
+    canEnterAdminHub,
+    getSidebarAdminGroups,
+    type SidebarAdminGroup,
+  } from "$lib/admin/destinations.js";
   import {
     adminKeys,
     authKeys,
@@ -258,6 +262,29 @@
 
   const MAX_SIDEBAR_FILTERS = 5;
 
+  function adminSidebarItem(group: SidebarAdminGroup): SidebarSubItem {
+    switch (group) {
+      case "people":
+        return {
+          id: "admin:people",
+          label: m.admin_people_title(),
+          ontap: () => void goto(resolve("/admin/people")),
+        };
+      case "organization":
+        return {
+          id: "admin:org",
+          label: m.admin_org_title(),
+          ontap: () => void goto(resolve("/admin/organization")),
+        };
+      case "communications":
+        return {
+          id: "admin:comms",
+          label: m.admin_comms_title(),
+          ontap: () => void goto(resolve("/admin/communications")),
+        };
+    }
+  }
+
   const sidebarSubItems = $derived.by((): readonly SidebarSection[] => {
     if (!layoutMode.isDesktop) return [];
 
@@ -320,29 +347,14 @@
       sections.push({ tabId: "library", items: kbItems });
     }
 
-    // Admin section: visible to any user who can reach the people page.
-    // This widens the admin nav section to queue managers and client
-    // viewers, matching the people page admission and the hub tiles.
-    if (canEnterAdminRoute(currentPermissions, "/admin/people")) {
+    // Admin section: shown to exactly the accounts the admin hub admits.
+    // Sub-items list only the groups holding a destination the viewer can
+    // see; an account whose only destinations are analytics gets the entry
+    // (which opens the hub) and no sub-items.
+    if (canEnterAdminHub(currentPermissions)) {
       sections.push({
         tabId: "admin",
-        items: [
-          {
-            id: "admin:people",
-            label: m.admin_people_title(),
-            ontap: () => void goto(resolve("/admin/people")),
-          },
-          {
-            id: "admin:org",
-            label: m.admin_org_title(),
-            ontap: () => void goto(resolve("/admin/organization")),
-          },
-          {
-            id: "admin:comms",
-            label: m.admin_comms_title(),
-            ontap: () => void goto(resolve("/admin/communications")),
-          },
-        ],
+        items: getSidebarAdminGroups(currentPermissions).map(adminSidebarItem),
       });
     }
 
@@ -562,8 +574,12 @@
           );
           return counts?.total;
         },
-        listAll: async (cursor) => {
+        // The tickets page passes its active filters as scope, so the run
+        // fetches only the tickets that page can show. The global search
+        // passes none and its run covers every ticket the account can reach.
+        listAll: async (cursor, scope) => {
           const result = await ticketsRouter.list.query({
+            ...scope,
             limit: 100,
             cursor,
           });

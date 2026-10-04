@@ -197,6 +197,15 @@ test.describe.serial("Desktop Responsive Layout", () => {
   test("dashboard lays four lanes across a wide dashboard", async () => {
     await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
+    // The click leaves the pointer on the rail, which expands on hover and
+    // narrows the dashboard container; move it off before measuring.
+    await page.mouse.move(640, 400);
+
+    // Four across needs list or cards; grid and table lanes are wider.
+    await page
+      .getByRole("group", { name: "View as" })
+      .getByRole("button", { name: "Cards" })
+      .click();
 
     await atViewport({ width: 1680, height: 1000 }, async () => {
       // One row: every heading shares a top edge, in priority order.

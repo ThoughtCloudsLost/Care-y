@@ -173,7 +173,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // Clear filter.
     await page.getByText("Clear all").click();
-    await expect(page.getByText("Help with housing")).toBeVisible();
+    // The title can also sit in an open detail pane at desktop widths.
+    await expect(page.getByText("Help with housing").first()).toBeVisible();
   });
 
   // ── 3b. Inline search over decrypted titles ─────────────────────
@@ -371,10 +372,20 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     }
     await expect(page).toHaveURL("/tickets");
 
-    // Wait for tickets to re-render.
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    // Wait for tickets to re-render. At desktop widths the title is also
+    // in the still-open detail pane's heading, so take the first match.
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
+
+    // At desktop widths close the pane, so the later tests in this group
+    // see one card title on the page rather than the card and the pane.
+    if (await isDesktopLayout(page)) {
+      await page.keyboard.press("Escape");
+      await expect(page.locator('[role="log"]')).not.toBeVisible({
+        timeout: 5_000,
+      });
+    }
   });
 
   // ── 8. Empty state ──────────────────────────────────────────────
@@ -410,7 +421,8 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // Clear filter.
     await page.getByText("Clear all").click();
-    await expect(page.getByText("Help with housing")).toBeVisible();
+    // The title can also sit in an open detail pane at desktop widths.
+    await expect(page.getByText("Help with housing").first()).toBeVisible();
   });
 
   // ── 9. Accessibility ────────────────────────────────────────────

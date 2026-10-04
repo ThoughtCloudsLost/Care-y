@@ -3,7 +3,9 @@ import { Permission } from "@care-y/shared";
 import {
   ADMIN_DESTINATIONS,
   GROUP_ORDER,
+  canEnterAdminHub,
   canEnterAdminRoute,
+  getSidebarAdminGroups,
   getVisibleDestinations,
   groupDestinations,
   type AdminGroup,
@@ -63,11 +65,18 @@ describe("getVisibleDestinations", () => {
     expect(visible).toEqual([]);
   });
 
+  it("shows the roles tile to an account holding only Manage roles", () => {
+    const visible = getVisibleDestinations(new Set([Permission.MANAGE_ROLES]));
+
+    expect(visible.map((d) => d.id)).toEqual(["roles"]);
+  });
+
   it("returns all destinations for a full admin permission set", () => {
     const permissions = new Set([
       Permission.MANAGE_USERS,
       Permission.MANAGE_QUEUES,
       Permission.VIEW_CLIENTS,
+      Permission.MANAGE_ROLES,
       Permission.MANAGE_INFRASTRUCTURE,
       Permission.WRITE_CALL_GREETINGS,
       Permission.WRITE_AUTOMATIC_REPLIES,
@@ -85,11 +94,7 @@ describe("getVisibleDestinations", () => {
     ]);
     const visible = getVisibleDestinations(permissions);
 
-    // Hidden entries declare admission only and never render as tiles.
-    const tileCount = ADMIN_DESTINATIONS.filter(
-      (d) => d.hidden !== true,
-    ).length;
-    expect(visible.length).toBe(tileCount);
+    expect(visible.length).toBe(ADMIN_DESTINATIONS.length);
   });
 });
 
@@ -103,14 +108,17 @@ describe("groupDestinations", () => {
   });
 
   // Render order within groups is user-facing (admin hub lists items
-  // top-to-bottom). Production always groups the visible set, so hidden
-  // admission-only entries never appear here.
-  it("people group contains users, queues, and clients in render order", () => {
-    const tiles = ADMIN_DESTINATIONS.filter((d) => d.hidden !== true);
-    const grouped = groupDestinations(tiles);
+  // top-to-bottom).
+  it("people group contains users, queues, clients and roles in render order", () => {
+    const grouped = groupDestinations(ADMIN_DESTINATIONS);
     const people = grouped.get("people") ?? [];
 
-    expect(people.map((d) => d.id)).toEqual(["users", "queues", "clients"]);
+    expect(people.map((d) => d.id)).toEqual([
+      "users",
+      "queues",
+      "clients",
+      "roles",
+    ]);
   });
 
   it("returns empty map for empty input", () => {
@@ -208,5 +216,59 @@ describe("fund destinations", () => {
     ]);
     expect(canEnterAdminRoute(auditor, "/admin/funds")).toBe(true);
     expect(canEnterAdminRoute(manager, "/admin/funds")).toBe(false);
+  });
+});
+
+describe("canEnterAdminHub", () => {
+  it("admits an account holding only Manage roles", () => {
+    expect(canEnterAdminHub(new Set([Permission.MANAGE_ROLES]))).toBe(true);
+  });
+
+  it("admits an account holding any single destination's permission", () => {
+    for (const dest of ADMIN_DESTINATIONS) {
+      expect(canEnterAdminHub(new Set([dest.permission]))).toBe(true);
+    }
+  });
+
+  it("refuses an account with no destination permission", () => {
+    expect(canEnterAdminHub(new Set([Permission.VIEW_CASES]))).toBe(false);
+    expect(canEnterAdminHub(new Set())).toBe(false);
+  });
+});
+
+describe("getSidebarAdminGroups", () => {
+  it("lists people, organization and communications for a full admin", () => {
+    const permissions = new Set(ADMIN_DESTINATIONS.map((d) => d.permission));
+
+    expect(getSidebarAdminGroups(permissions)).toEqual([
+      "people",
+      "organization",
+      "communications",
+    ]);
+  });
+
+  it("lists people for an account holding only Manage roles", () => {
+    expect(getSidebarAdminGroups(new Set([Permission.MANAGE_ROLES]))).toEqual([
+      "people",
+    ]);
+  });
+
+  it("lists communications for an account holding only a communications permission", () => {
+    expect(
+      getSidebarAdminGroups(new Set([Permission.WRITE_CALL_GREETINGS])),
+    ).toEqual(["communications"]);
+  });
+
+  it("lists organization for an account holding only Manage funds", () => {
+    expect(getSidebarAdminGroups(new Set([Permission.MANAGE_FUNDS]))).toEqual([
+      "organization",
+    ]);
+  });
+
+  it("lists no group for an analytics-only account the hub still admits", () => {
+    const permissions = new Set([Permission.VIEW_AUDIT_LOG]);
+
+    expect(getSidebarAdminGroups(permissions)).toEqual([]);
+    expect(canEnterAdminHub(permissions)).toBe(true);
   });
 });

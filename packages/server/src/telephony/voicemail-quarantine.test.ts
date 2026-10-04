@@ -23,6 +23,7 @@ import type { BlobStore, BlobCategory } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { NotificationService } from "../notifications/service.js";
+import type { PendingClient } from "../tickets/ticket-service.js";
 import {
   quarantineRecording,
   listQuarantined,
@@ -39,6 +40,7 @@ import {
   ConflictError,
   ValidationError,
   TelephonyError,
+  InternalError,
 } from "../errors.js";
 import {
   SYSTEM_ACTOR_ID,
@@ -68,6 +70,7 @@ import {
   type QueueId,
   type UserId,
   type BlobKey,
+  type PhoneHash,
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -854,6 +857,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
         return { quarantineId: row.id, blobKey };
       }
 
+      async function countFollowUps(ticketId: TicketId): Promise<number> {
+        const rows = await testDb.db
+          .selectFrom("followups")
+          .select("id")
+          .where("ticket_id", "=", ticketId)
+          .execute();
+        return rows.length;
+      }
+
       it("throws NotFoundError for nonexistent quarantine row", async () => {
         const store = createMockBlobStore();
         const deps: RouteQuarantineDeps = {
@@ -909,9 +921,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ).rejects.toThrow(ConflictError);
       });
 
-      it("throws ValidationError when decoded audio exceeds max bytes", async () => {
+      it("refuses audio over the maximum before claiming the row", async () => {
         const store = createMockBlobStore();
-        const { quarantineId } = await seedPendingQuarantineRow(store);
+        const { quarantineId, blobKey } = await seedPendingQuarantineRow(store);
 
         const fixture = await createTestTicketFixture(testDb.db, {
           queueId: intakeQueue.id,
@@ -939,11 +951,104 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expect(
           routeQuarantined(deps, input, adminUser.id),
         ).rejects.toThrow(ValidationError);
+
+        const releasedRow = await testDb.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("id", "=", quarantineId)
+          .executeTakeFirstOrThrow();
+        expect(releasedRow.status).toBe("pending");
+        expect(releasedRow.resolved_by).toBeNull();
+        expect(releasedRow.resolved_at).toBeNull();
+        expect(await store.exists(blobKey)).toBe(true);
       });
 
-      it("throws NotFoundError for nonexistent target ticket", async () => {
+      it("refuses an oversized payload on a client token target before any write", async () => {
         const store = createMockBlobStore();
-        const { quarantineId } = await seedPendingQuarantineRow(store);
+        const { quarantineId, blobKey } = await seedPendingQuarantineRow(store);
+
+        const phoneHash =
+          `ph-route-${crypto.randomUUID().slice(0, 8)}` as PhoneHash;
+        const token = crypto.randomUUID();
+        const pendingClients = new Map<string, PendingClient>();
+        pendingClients.set(token, {
+          phoneHash,
+          opsEncryptedPhone: Buffer.from("encrypted-phone"),
+          phoneMatchHash: null,
+          orgSchema: testDb.schemaName as OrgSchema,
+          createdAt: Date.now(),
+        });
+
+        const clientsBefore = (
+          await testDb.db.selectFrom("clients").select("id").execute()
+        ).length;
+        const ticketsBefore = (
+          await testDb.db.selectFrom("tickets").select("id").execute()
+        ).length;
+
+        const oversized = Buffer.alloc(
+          VOICEMAIL_QUARANTINE_MAX_BYTES + 1,
+          0x41,
+        );
+        const deps: RouteQuarantineDeps = {
+          tDb: testDb.db,
+          blobStore: store,
+          orgSchema: testDb.schemaName as OrgSchema,
+          pendingClients,
+          sealedBox: createMockSealedBox(),
+        };
+        const input: RouteQuarantineInput = {
+          quarantineId,
+          target: { type: "clientToken", clientToken: token },
+          audioData: oversized.toString("base64"),
+        };
+
+        const putSpy = vi.spyOn(store, "put");
+        const updateSpy = vi.spyOn(testDb.db, "updateTable");
+        const insertSpy = vi.spyOn(testDb.db, "insertInto");
+        try {
+          await expect(
+            routeQuarantined(deps, input, adminUser.id),
+          ).rejects.toThrow(ValidationError);
+          expect(putSpy).not.toHaveBeenCalled();
+          expect(updateSpy).not.toHaveBeenCalled();
+          expect(insertSpy).not.toHaveBeenCalled();
+        } finally {
+          putSpy.mockRestore();
+          updateSpy.mockRestore();
+          insertSpy.mockRestore();
+        }
+
+        expect(pendingClients.has(token)).toBe(true);
+        const phones = await testDb.db
+          .selectFrom("phones")
+          .select("id")
+          .where("phone_hash", "=", phoneHash)
+          .execute();
+        expect(phones).toHaveLength(0);
+        expect(
+          (await testDb.db.selectFrom("clients").select("id").execute()).length,
+        ).toBe(clientsBefore);
+        expect(
+          (await testDb.db.selectFrom("tickets").select("id").execute()).length,
+        ).toBe(ticketsBefore);
+
+        const row = await testDb.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("id", "=", quarantineId)
+          .executeTakeFirstOrThrow();
+        expect(row.status).toBe("pending");
+        expect(row.resolved_by).toBeNull();
+        expect(row.resolved_at).toBeNull();
+        expect(row.routed_ticket_id).toBeNull();
+        expect(row.routed_followup_id).toBeNull();
+        expect(await store.exists(blobKey)).toBe(true);
+      });
+
+      it("throws NotFoundError for nonexistent target ticket and releases the claim", async () => {
+        const store = createMockBlobStore();
+        const { quarantineId, blobKey } = await seedPendingQuarantineRow(store);
 
         const deps: RouteQuarantineDeps = {
           tDb: testDb.db,
@@ -964,6 +1069,252 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expect(
           routeQuarantined(deps, input, adminUser.id),
         ).rejects.toThrow(NotFoundError);
+
+        const releasedRow = await testDb.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("id", "=", quarantineId)
+          .executeTakeFirstOrThrow();
+        expect(releasedRow.status).toBe("pending");
+        expect(releasedRow.resolved_by).toBeNull();
+        expect(releasedRow.resolved_at).toBeNull();
+        expect(await store.exists(blobKey)).toBe(true);
+      });
+
+      it("surfaces the original error when releasing the claim fails", async () => {
+        const store = createMockBlobStore();
+        const { quarantineId } = await seedPendingQuarantineRow(store);
+
+        const deps: RouteQuarantineDeps = {
+          tDb: testDb.db,
+          blobStore: store,
+          orgSchema: testDb.schemaName as OrgSchema,
+          pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
+        };
+        const input: RouteQuarantineInput = {
+          quarantineId,
+          target: {
+            type: "ticketId",
+            ticketId: crypto.randomUUID() as TicketId,
+          },
+          audioData: Buffer.from("test").toString("base64"),
+        };
+
+        // The first updateTable call is the claim and goes through; the
+        // second is the release, which fails.
+        const releaseFailure = new InternalError("simulated release failure");
+        const origUpdateTable = testDb.db.updateTable.bind(testDb.db);
+        let updateCalls = 0;
+        const updateSpy = vi
+          .spyOn(testDb.db, "updateTable")
+          .mockImplementation(((table: string) => {
+            updateCalls += 1;
+            if (updateCalls === 2) {
+              throw releaseFailure;
+            }
+            return origUpdateTable(table as never);
+          }) as unknown as typeof testDb.db.updateTable);
+
+        let caught: unknown;
+        try {
+          caught = await routeQuarantined(deps, input, adminUser.id).then(
+            () => undefined,
+            (err: unknown) => err,
+          );
+        } finally {
+          updateSpy.mockRestore();
+        }
+
+        expect(caught).toBeInstanceOf(NotFoundError);
+        expect(caught instanceof NotFoundError && caught.cause).toBe(
+          releaseFailure,
+        );
+      });
+
+      it("routes to an open ticket, records the routed ids, and deletes the sealed blob", async () => {
+        const store = createMockBlobStore();
+        const { quarantineId, blobKey } = await seedPendingQuarantineRow(store);
+        const fixture = await createTestTicketFixture(testDb.db, {
+          queueId: intakeQueue.id,
+        });
+        const before = await countFollowUps(fixture.ticketId);
+
+        const deps: RouteQuarantineDeps = {
+          tDb: testDb.db,
+          blobStore: store,
+          orgSchema: testDb.schemaName as OrgSchema,
+          pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
+        };
+        const input: RouteQuarantineInput = {
+          quarantineId,
+          target: { type: "ticketId", ticketId: fixture.ticketId },
+          audioData: Buffer.from("voicemail-audio").toString("base64"),
+          durationSeconds: 12,
+        };
+
+        const result = await routeQuarantined(deps, input, adminUser.id);
+
+        expect(result.ticketId).toBe(fixture.ticketId);
+        expect(await countFollowUps(fixture.ticketId)).toBe(before + 1);
+
+        const routedRow = await testDb.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("id", "=", quarantineId)
+          .executeTakeFirstOrThrow();
+        expect(routedRow.status).toBe("routed");
+        expect(routedRow.routed_ticket_id).toBe(fixture.ticketId);
+        expect(routedRow.routed_followup_id).toBe(result.followUpId);
+        expect(routedRow.resolved_by).toBe(adminUser.id);
+        expect(routedRow.resolved_at).toBeInstanceOf(Date);
+        expect(await store.exists(blobKey)).toBe(false);
+      });
+
+      it("lets only one of two concurrent routes write a follow-up", async () => {
+        const store = createMockBlobStore();
+        const { quarantineId } = await seedPendingQuarantineRow(store);
+        const fixture = await createTestTicketFixture(testDb.db, {
+          queueId: intakeQueue.id,
+        });
+        const before = await countFollowUps(fixture.ticketId);
+
+        const deps: RouteQuarantineDeps = {
+          tDb: testDb.db,
+          blobStore: store,
+          orgSchema: testDb.schemaName as OrgSchema,
+          pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
+        };
+        const input: RouteQuarantineInput = {
+          quarantineId,
+          target: { type: "ticketId", ticketId: fixture.ticketId },
+          audioData: Buffer.from("race-audio").toString("base64"),
+        };
+
+        const results = await Promise.allSettled([
+          routeQuarantined(deps, input, adminUser.id),
+          routeQuarantined(deps, input, adminUser.id),
+        ]);
+        const fulfilled = results.filter(
+          (
+            r,
+          ): r is PromiseFulfilledResult<
+            Awaited<ReturnType<typeof routeQuarantined>>
+          > => r.status === "fulfilled",
+        );
+        const rejected = results.filter(
+          (r): r is PromiseRejectedResult => r.status === "rejected",
+        );
+
+        expect(fulfilled).toHaveLength(1);
+        expect(rejected).toHaveLength(1);
+        expect(rejected[0]?.reason).toBeInstanceOf(ConflictError);
+        expect(await countFollowUps(fixture.ticketId)).toBe(before + 1);
+
+        const routedRow = await testDb.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("id", "=", quarantineId)
+          .executeTakeFirstOrThrow();
+        expect(routedRow.routed_followup_id).toBe(
+          fulfilled[0]?.value.followUpId,
+        );
+      });
+
+      it("keeps the client token and releases the claim when the follow-up write fails", async () => {
+        const store = createMockBlobStore();
+        const { quarantineId, blobKey } = await seedPendingQuarantineRow(store);
+        const failingStore: BlobStore = {
+          ...store,
+          async put(orgSchema, category, blob) {
+            if (category === "recording") {
+              throw new InternalError("recording store unavailable");
+            }
+            return store.put(orgSchema, category, blob);
+          },
+        };
+
+        const token = crypto.randomUUID();
+        const pendingClients = new Map<string, PendingClient>();
+        pendingClients.set(token, {
+          phoneHash: `ph-route-${crypto.randomUUID().slice(0, 8)}` as PhoneHash,
+          opsEncryptedPhone: Buffer.from("encrypted-phone"),
+          phoneMatchHash: null,
+          orgSchema: testDb.schemaName as OrgSchema,
+          createdAt: Date.now(),
+        });
+
+        const deps: RouteQuarantineDeps = {
+          tDb: testDb.db,
+          blobStore: failingStore,
+          orgSchema: testDb.schemaName as OrgSchema,
+          pendingClients,
+          sealedBox: createMockSealedBox(),
+        };
+        const input: RouteQuarantineInput = {
+          quarantineId,
+          target: { type: "clientToken", clientToken: token },
+          audioData: Buffer.from("token-audio").toString("base64"),
+        };
+
+        await expect(
+          routeQuarantined(deps, input, adminUser.id),
+        ).rejects.toThrow(InternalError);
+
+        expect(pendingClients.has(token)).toBe(true);
+        const releasedRow = await testDb.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("id", "=", quarantineId)
+          .executeTakeFirstOrThrow();
+        expect(releasedRow.status).toBe("pending");
+        expect(releasedRow.resolved_by).toBeNull();
+        expect(releasedRow.resolved_at).toBeNull();
+        expect(releasedRow.routed_followup_id).toBeNull();
+        expect(await store.exists(blobKey)).toBe(true);
+      });
+
+      it("consumes the client token once the route succeeds", async () => {
+        const store = createMockBlobStore();
+        const { quarantineId, blobKey } = await seedPendingQuarantineRow(store);
+
+        const token = crypto.randomUUID();
+        const pendingClients = new Map<string, PendingClient>();
+        pendingClients.set(token, {
+          phoneHash: `ph-route-${crypto.randomUUID().slice(0, 8)}` as PhoneHash,
+          opsEncryptedPhone: Buffer.from("encrypted-phone"),
+          phoneMatchHash: null,
+          orgSchema: testDb.schemaName as OrgSchema,
+          createdAt: Date.now(),
+        });
+
+        const deps: RouteQuarantineDeps = {
+          tDb: testDb.db,
+          blobStore: store,
+          orgSchema: testDb.schemaName as OrgSchema,
+          pendingClients,
+          sealedBox: createMockSealedBox(),
+        };
+        const input: RouteQuarantineInput = {
+          quarantineId,
+          target: { type: "clientToken", clientToken: token },
+          audioData: Buffer.from("token-audio").toString("base64"),
+        };
+
+        const result = await routeQuarantined(deps, input, adminUser.id);
+
+        expect(pendingClients.has(token)).toBe(false);
+        const routedRow = await testDb.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("id", "=", quarantineId)
+          .executeTakeFirstOrThrow();
+        expect(routedRow.status).toBe("routed");
+        expect(routedRow.routed_followup_id).toBe(result.followUpId);
+        expect(routedRow.routed_ticket_id).toBe(result.ticketId);
+        expect(await store.exists(blobKey)).toBe(false);
       });
     });
 

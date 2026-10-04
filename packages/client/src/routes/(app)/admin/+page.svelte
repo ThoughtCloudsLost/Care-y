@@ -20,6 +20,7 @@
   import {
     type AdminDestination,
     GROUP_ORDER,
+    canEnterAdminHub,
     getVisibleDestinations,
     groupDestinations,
     groupLabel,
@@ -35,7 +36,7 @@
   const visible = $derived(getVisibleDestinations(permissions));
 
   $effect(() => {
-    if (visible.length === 0) void goto(resolve("/"));
+    if (!canEnterAdminHub(permissions)) void goto(resolve("/"));
   });
 
   const grouped = $derived(groupDestinations(visible));

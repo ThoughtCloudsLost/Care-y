@@ -221,6 +221,8 @@
       ondelete={savedFilters.ondelete}
       ontoggleshare={savedFilters.ontoggleshare}
       currentUserId={savedFilters.currentUserId}
+      sharedLoadFailed={savedFilters.sharedLoadFailed}
+      onretryshared={savedFilters.onretryshared}
     />
   {/if}
   <div class="filter-row">

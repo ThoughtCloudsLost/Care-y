@@ -20,6 +20,12 @@ import {
 
 type ToastStore = typeof ToastStoreType;
 
+/**
+ * Written in place of a message this account cannot open, whether the
+ * decrypt was refused or the account holds no ticket key at all.
+ */
+const ACCESS_DENIED_MARKER = "[access denied]";
+
 // ── Follow-up shape (subset of the full server type) ──
 
 export interface SelectableFollowUp {
@@ -111,7 +117,7 @@ export function createSelectMode(config: SelectModeConfig): SelectModeState {
         }
       }
 
-      let content = "";
+      let content = ACCESS_DENIED_MARKER;
       const keyWrap = config.getTicketKeyWrap();
       if (keyWrap) {
         const raw = config.followUpCache.decryptContent(
@@ -128,7 +134,7 @@ export function createSelectMode(config: SelectModeConfig): SelectModeState {
           // the envelope.
           ready: (v) =>
             readableNoteText(v, config.resolveFundName) ?? "[decryption error]",
-          denied: () => "[access denied]",
+          denied: () => ACCESS_DENIED_MARKER,
           error: () => "[decryption error]",
         });
       }

@@ -31,6 +31,7 @@ import {
 import * as m from "$lib/paraglide/messages.js";
 import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 import { formatAmount } from "$lib/funds/fund-display.js";
+import { formatShortDate } from "$lib/utils/time.js";
 import { donationKeys, fundKeys } from "$lib/query/keys.js";
 import FundsSection from "./FundsSection.svelte";
 import type * as ErrorsNS from "$lib/errors.js";
@@ -238,6 +239,7 @@ function fund(overrides: Partial<FundView> = {}): FundView {
     isActive: true,
     sortOrder: 0,
     orgKeyGeneration: 1,
+    createdAt: "2026-09-01T12:00:00.000Z",
     balance: { balanceMinor: 35_000, version: 4 },
     raised: { kind: "unlinked" },
     available: { kind: "amount", minor: 35_000 },
@@ -334,6 +336,36 @@ describe("FundsSection", () => {
     const { container } = render(FundsSection);
 
     expect(container.textContent).toContain(m.admin_status_inactive());
+  });
+
+  it("shows the day a fund was created in its edit sheet", async () => {
+    render(FundsSection);
+
+    await fireEvent.click(screen.getByText("Groceries"));
+
+    const created = screen.getByText(
+      m.admin_funds_created_on({
+        date: formatShortDate("2026-09-01T12:00:00.000Z"),
+      }),
+    );
+    expect(created).toBeTruthy();
+    expect(created.getAttribute("datetime")).toBe("2026-09-01T12:00:00.000Z");
+  });
+
+  it("shows no creation date while adding a fund", async () => {
+    render(FundsSection);
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: m.admin_funds_add() }),
+    );
+
+    expect(
+      screen.queryByText(
+        m.admin_funds_created_on({
+          date: formatShortDate("2026-09-01T12:00:00.000Z"),
+        }),
+      ),
+    ).toBeNull();
   });
 
   it("creates a fund with its name, currency and a sealed zero balance", async () => {

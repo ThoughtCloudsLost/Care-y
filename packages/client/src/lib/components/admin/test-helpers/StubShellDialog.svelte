@@ -30,4 +30,6 @@
       {@render buttonsSnippet()}
     {/if}
   </div>
+{:else}
+  <div data-testid="stub-dialog-closed" data-title={title} hidden></div>
 {/if}

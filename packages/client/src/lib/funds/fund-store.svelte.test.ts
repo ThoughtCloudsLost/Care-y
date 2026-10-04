@@ -284,6 +284,7 @@ function fundView(overrides: Partial<FundView> = {}): FundView {
     isActive: true,
     sortOrder: 0,
     orgKeyGeneration: 1,
+    createdAt: "2026-09-01T12:00:00.000Z",
     balance: { balanceMinor: 10_000, version: 4 },
     raised: { kind: "unlinked" },
     available: { kind: "amount", minor: 10_000 },

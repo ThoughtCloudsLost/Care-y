@@ -354,12 +354,13 @@ describe("Manager role page", () => {
     });
   });
 
-  describe("access control", () => {
-    it("redirects volunteer-role users", () => {
+  describe("access", () => {
+    it("renders for a user without Manage users instead of redirecting", () => {
       setPermissions(Permission.VIEW_CASES);
-      renderPage();
+      const { container } = renderPage();
 
-      expect(mockGoto).toHaveBeenCalledWith("/");
+      expect(mockGoto).not.toHaveBeenCalled();
+      expect(container.querySelector("#section-role")).toBeTruthy();
     });
   });
 

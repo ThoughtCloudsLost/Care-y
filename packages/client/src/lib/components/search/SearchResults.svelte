@@ -5,6 +5,7 @@
     searchAll,
     getProvider,
     resetFullSearch,
+    resetFullSearchForProvider,
     runFullSearchForProvider,
   } from "$lib/search/registry.svelte.js";
   import type { SearchResultGroup } from "$lib/search/types.js";
@@ -78,6 +79,11 @@
     }
   }
 
+  function retryFullSearch(providerId: string): void {
+    resetFullSearchForProvider(providerId);
+    runFullSearchForProvider(providerId, trimmedQuery);
+  }
+
   function handleShowAllNavigate(href: string): void {
     onnavigate(`/${href.replace(/^\//, "")}`);
   }
@@ -125,6 +131,9 @@
         emptyText={group.emptyText}
         coverageText={group.coverageText}
         fetchMoreLabel={group.fetchMoreLabel}
+        onretry={group.incomplete === true
+          ? () => retryFullSearch(group.providerId)
+          : undefined}
       >
         {#if group.renderMode === "card-strip"}
           <TicketResultStrip

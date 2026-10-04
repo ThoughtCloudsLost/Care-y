@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Button, Progressbar } from "konsta/svelte";
-  import { ArrowDown, ArrowUp, ScanSearch, X } from "@lucide/svelte";
+  import { ArrowDown, ArrowUp, RotateCw, ScanSearch, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import type { DeepSearchStatus } from "$lib/search/deep-search.svelte.js";
 
   interface Props {
     term: string;
@@ -16,9 +17,21 @@
     navLabel?: string;
     /** When present, shows a deep search button. */
     ondeepsearch?: () => void;
-    deepSearchStatus?: "idle" | "searching" | "done";
+    deepSearchStatus?: DeepSearchStatus;
     deepSearchSearched?: number;
     deepSearchTotal?: number;
+    /** Retry a stopped deep search; shown as an icon button in the incomplete state. */
+    ondeepsearchretry?: () => void;
+    /** Composed coverage line for the incomplete state (the caller owns the noun). */
+    deepSearchIncompleteText?: string;
+    /**
+     * Clears the surface's filters. With clearFiltersLabel, shows the
+     * filter-scope row under the bar; the caller passes both only while
+     * filters are active.
+     */
+    onclearfilters?: () => void;
+    /** Composed label for the clear-filters button (the caller owns the noun). */
+    clearFiltersLabel?: string;
   }
 
   const {
@@ -34,6 +47,10 @@
     deepSearchStatus,
     deepSearchSearched = 0,
     deepSearchTotal = 0,
+    ondeepsearchretry,
+    deepSearchIncompleteText,
+    onclearfilters,
+    clearFiltersLabel,
   }: Props = $props();
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -112,7 +129,7 @@
   <span class="sr-only" id="search-nav-hints">
     {m.search_nav_shortcuts()}
   </span>
-  {#if ondeepsearch != null || deepSearchStatus === "searching" || deepSearchStatus === "done"}
+  {#if ondeepsearch != null || deepSearchStatus === "searching" || deepSearchStatus === "incomplete" || deepSearchStatus === "done"}
     <span class="deep-search-area" aria-live="polite">
       {#if deepSearchStatus === "searching"}
         <span class="deep-search-inline-progress">
@@ -131,6 +148,24 @@
               {m.search_deep_nav_loading({ count: deepSearchSearched })}
             {/if}
           </span>
+        </span>
+      {:else if deepSearchStatus === "incomplete"}
+        <span class="deep-search-incomplete">
+          {#if deepSearchIncompleteText != null}
+            <span class="deep-search-incomplete-text"
+              >{deepSearchIncompleteText}</span
+            >
+          {/if}
+          {#if ondeepsearchretry != null}
+            <button
+              type="button"
+              class="deep-search-trigger calm-escalation"
+              aria-label={m.common_retry()}
+              onclick={ondeepsearchretry}
+            >
+              <RotateCw size={16} aria-hidden="true" />
+            </button>
+          {/if}
         </span>
       {:else if deepSearchStatus === "done"}
         <ScanSearch size={12} aria-hidden="true" class="deep-done-icon" />
@@ -177,6 +212,14 @@
     </Button>
   </div>
 </div>
+{#if onclearfilters != null && clearFiltersLabel != null}
+  <div class="search-scope-row">
+    <span class="search-scope-text">{m.search_filter_scoped_notice()}</span>
+    <Button clear small inline onclick={onclearfilters}>
+      {clearFiltersLabel}
+    </Button>
+  </div>
+{/if}
 
 <style>
   /* Navigator bar layout */
@@ -231,6 +274,22 @@
     margin-right: auto;
   }
 
+  /* Second row: says the search covers only the active filters. */
+  .search-scope-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs, 4px);
+    padding: 0 0.25rem 0.25rem 0.5rem;
+  }
+
+  .search-scope-text {
+    font-size: var(--text-xs, 0.75rem);
+    line-height: 1.25;
+    color: var(--muted);
+    min-width: 0;
+  }
+
   .search-nav-buttons {
     display: flex;
     align-items: center;
@@ -255,6 +314,20 @@
     font-size: var(--text-xs, 0.75rem);
     color: var(--muted);
     white-space: nowrap;
+  }
+
+  .deep-search-incomplete {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+  }
+
+  /* The line wraps inside the bar rather than squeezing the refine field. */
+  .deep-search-incomplete-text {
+    font-size: var(--text-xs, 0.75rem);
+    line-height: 1.25;
+    color: var(--muted);
+    max-width: 10rem;
   }
 
   /* Icon-sized placement of the shared calm-escalation anatomy;

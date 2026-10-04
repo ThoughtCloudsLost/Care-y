@@ -144,6 +144,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   hub_terminology_subtitle: () => "Custom terms",
   hub_note_types_subtitle: () => "Note categories",
   hub_users_subtitle: () => "Manage users, roles, and invitations",
+  admin_tab_roles: () => "Roles",
+  hub_roles_subtitle: () => "Permissions for each role",
   hub_queues_subtitle: () => "Create and assign ticket queues",
   hub_telephony_subtitle: () => "Phone numbers and call routing",
   hub_blocklist_subtitle: () => "Blocked numbers",
@@ -265,6 +267,15 @@ describe("Admin hub page", () => {
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
+    });
+
+    it("admits an account holding only MANAGE_ROLES and shows the Roles tile", () => {
+      setPermissions(Permission.MANAGE_ROLES);
+      renderPage();
+
+      expect(mockGoto).not.toHaveBeenCalled();
+      expect(screen.getByText("Roles")).toBeTruthy();
+      expect(screen.getByText("Permissions for each role")).toBeTruthy();
     });
 
     it("does not redirect when user has MANAGE_KEYS", () => {

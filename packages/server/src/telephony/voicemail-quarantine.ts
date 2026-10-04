@@ -45,7 +45,12 @@ import { sealBufferAndZero, sealString } from "./crypto-helpers.js";
 import { deleteOrEnqueue } from "./log-deletion-helpers.js";
 import { createAuditService } from "../tickets/audit.js";
 import { listActiveUserIdsWithPermission } from "../auth/roles.js";
-import { NotFoundError, ConflictError, ValidationError } from "../errors.js";
+import {
+  NotFoundError,
+  ConflictError,
+  ValidationError,
+  InternalError,
+} from "../errors.js";
 import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
 import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
 import { createPhoneRepository } from "./models/phone-repo.js";
@@ -376,16 +381,48 @@ export async function getQuarantineBlob(
  * via createEncryptedFollowUp. Plaintext audio is handled as a Buffer and
  * zeroed in a finally block.
  *
- * Atomic pending-guard: the quarantine row is marked routed only after
- * the follow-up is successfully created. If two admins try to route the
- * same voicemail, one will get a ConflictError.
+ * Claim first, then write. An update guarded on status 'pending' marks
+ * the row routed before the ticket is resolved or the follow-up is
+ * written, so when two admins route the same voicemail, one gets a
+ * ConflictError and writes nothing. A second update fills the routed
+ * ticket and follow-up ids once the follow-up exists.
+ *
+ * An audio payload over the maximum size is refused before the row is
+ * read, so it writes nothing. If the ticket resolution or the follow-up
+ * write fails, the claim is released and the row returns to pending, so
+ * the voicemail stays in the quarantine queue. The follow-up write is
+ * itself several writes (blob store, key wraps, follow-up row, recording
+ * row) with no transaction around them, so a failure late in that write
+ * can leave a follow-up on the ticket after the claim is released, and a
+ * retry can then add a second one. Making the follow-up write
+ * transactional is a separate change. If releasing the claim fails, the
+ * original failure is rethrown with the release failure attached as its
+ * cause, unless it already carries one. A pending client token is
+ * consumed only after the follow-up and the fill-in update succeed, so a
+ * failed attempt can be retried with the same token. A failed fill-in
+ * update does not release the claim, because the follow-up already exists
+ * and a retry would add a second one. The sealed quarantine blob is
+ * deleted only after the follow-up exists.
  */
 export async function routeQuarantined(
   deps: RouteQuarantineDeps,
   input: RouteQuarantineInput,
   actorId: UserId,
 ): Promise<RouteQuarantineResult> {
-  const { tDb, blobStore, orgSchema, pendingClients } = deps;
+  const { tDb, blobStore, pendingClients } = deps;
+
+  // Refuse an oversized payload before any read or write. Buffer.byteLength
+  // computes the decoded size without allocating the plaintext audio. The
+  // Node Buffer.byteLength docs note that for base64 it assumes valid input
+  // and can overestimate for strings containing whitespace, so this check
+  // can only refuse early, never admit an oversized payload. The check after
+  // decoding in writeRoutedFollowUp stays the authoritative one.
+  if (
+    Buffer.byteLength(input.audioData, "base64") >
+    VOICEMAIL_QUARANTINE_MAX_BYTES
+  ) {
+    throw new ValidationError("Decoded audio exceeds maximum allowed size");
+  }
 
   // Load the quarantine row
   const row = await tDb
@@ -401,108 +438,11 @@ export async function routeQuarantined(
     throw new ConflictError("Quarantine entry is already resolved");
   }
 
-  // Resolve the target ticket
-  let ticketId: TicketId;
-
-  switch (input.target.type) {
-    case "clientId": {
-      const intakeQueueId = await loadIntakeQueueId(tDb);
-      if (intakeQueueId === null) {
-        throw new ValidationError(
-          "No intake queue configured for this organization",
-        );
-      }
-      ticketId = await resolveInboundTicket(
-        tDb,
-        input.target.clientId,
-        intakeQueueId,
-        "Quarantined voicemail routed by admin",
-      );
-      break;
-    }
-    case "clientToken": {
-      const intakeQueueId = await loadIntakeQueueId(tDb);
-      if (intakeQueueId === null) {
-        throw new ValidationError(
-          "No intake queue configured for this organization",
-        );
-      }
-      const pending = pendingClients.get(input.target.clientToken);
-      if (!pending) {
-        throw new NotFoundError("Client token expired or invalid");
-      }
-      pendingClients.delete(input.target.clientToken);
-
-      const phoneRepo = createPhoneRepository(tDb);
-      const clientRepo = createClientRepository(tDb, phoneRepo, deps.sealedBox);
-      const result = await clientRepo.findOrCreateByPhoneHash(
-        pending.phoneHash,
-        pending.opsEncryptedPhone,
-        pending.phoneMatchHash,
-      );
-
-      ticketId = await resolveInboundTicket(
-        tDb,
-        result.client.id,
-        intakeQueueId,
-        "Quarantined voicemail routed by admin",
-      );
-      break;
-    }
-    case "ticketId": {
-      const ticket = await tDb
-        .selectFrom("tickets")
-        .select(["id", "status"])
-        .where("id", "=", input.target.ticketId)
-        .executeTakeFirst();
-      if (!ticket) {
-        throw new NotFoundError("Target ticket not found");
-      }
-      if (ticket.status !== "open") {
-        throw new ValidationError("Target ticket is not open");
-      }
-      ticketId = ticket.id;
-      break;
-    }
-  }
-
-  // Decode base64 audio data into a Buffer (plaintext audio: relay rules apply)
-  const audioData = Buffer.from(input.audioData, "base64");
-
-  if (audioData.length > VOICEMAIL_QUARANTINE_MAX_BYTES) {
-    audioData.fill(0);
-    throw new ValidationError("Decoded audio exceeds maximum allowed size");
-  }
-
-  let followUpId: FollowupId;
-  try {
-    const fuResult = await createEncryptedFollowUp(
-      tDb,
-      ticketId,
-      Buffer.from("Voicemail recording", "utf-8"),
-      "voicemail",
-      "client",
-      {
-        recording: {
-          data: audioData,
-          durationSeconds: input.durationSeconds ?? 0,
-        },
-        blobStore,
-        orgSchema,
-      },
-    );
-    followUpId = fuResult.followUpId;
-  } finally {
-    audioData.fill(0);
-  }
-
-  // Atomic pending-guard update
-  const updateResult = await tDb
+  // Claim the row before any other write, so a lost race writes nothing.
+  const claimResult = await tDb
     .updateTable("voicemail_quarantine")
     .set({
       status: "routed",
-      routed_ticket_id: ticketId,
-      routed_followup_id: followUpId,
       resolved_by: actorId,
       resolved_at: new Date(),
     })
@@ -510,8 +450,51 @@ export async function routeQuarantined(
     .where("status", "=", "pending")
     .executeTakeFirst();
 
-  if (updateResult.numUpdatedRows === 0n) {
+  if (claimResult.numUpdatedRows === 0n) {
     throw new ConflictError("Quarantine entry was resolved by another user");
+  }
+
+  let ticketId: TicketId;
+  let followUpId: FollowupId;
+  try {
+    ticketId = await resolveRouteTicket(deps, input.target);
+    followUpId = await writeRoutedFollowUp(deps, input, ticketId);
+  } catch (err) {
+    try {
+      await releaseQuarantineClaim(tDb, input.quarantineId, actorId);
+    } catch (releaseErr) {
+      // Keep the original failure as the one the caller sees, carrying the
+      // release failure as its cause when it has none of its own.
+      if (err instanceof Error && err.cause === undefined) {
+        err.cause = releaseErr;
+      }
+    }
+    throw err;
+  }
+
+  // Record the routed ids. A failure here keeps the claim: the follow-up
+  // already exists, and releasing would let a retry add a second one.
+  const fillResult = await tDb
+    .updateTable("voicemail_quarantine")
+    .set({
+      routed_ticket_id: ticketId,
+      routed_followup_id: followUpId,
+    })
+    .where("id", "=", input.quarantineId)
+    .where("status", "=", "routed")
+    .where("resolved_by", "=", actorId)
+    .where("routed_followup_id", "is", null)
+    .executeTakeFirst();
+
+  if (fillResult.numUpdatedRows === 0n) {
+    throw new InternalError(
+      "Quarantine claim was lost before the routed ids were recorded",
+    );
+  }
+
+  // The follow-up and the fill-in succeeded: consume the client token.
+  if (input.target.type === "clientToken") {
+    pendingClients.delete(input.target.clientToken);
   }
 
   // Delete the sealed quarantine blob (original sealed-box copy)
@@ -609,4 +592,136 @@ async function loadIntakeQueueId(
     .executeTakeFirst();
 
   return config?.intake_queue_id ?? null;
+}
+
+/**
+ * Resolves the ticket a quarantined voicemail is routed to. A client
+ * token is read here but not consumed; the caller deletes it once the
+ * route has fully succeeded.
+ */
+async function resolveRouteTicket(
+  deps: RouteQuarantineDeps,
+  target: RouteQuarantineInput["target"],
+): Promise<TicketId> {
+  const { tDb, pendingClients } = deps;
+
+  switch (target.type) {
+    case "clientId": {
+      const intakeQueueId = await loadIntakeQueueId(tDb);
+      if (intakeQueueId === null) {
+        throw new ValidationError(
+          "No intake queue configured for this organization",
+        );
+      }
+      return resolveInboundTicket(
+        tDb,
+        target.clientId,
+        intakeQueueId,
+        "Quarantined voicemail routed by admin",
+      );
+    }
+    case "clientToken": {
+      const intakeQueueId = await loadIntakeQueueId(tDb);
+      if (intakeQueueId === null) {
+        throw new ValidationError(
+          "No intake queue configured for this organization",
+        );
+      }
+      const pending = pendingClients.get(target.clientToken);
+      if (!pending) {
+        throw new NotFoundError("Client token expired or invalid");
+      }
+
+      const phoneRepo = createPhoneRepository(tDb);
+      const clientRepo = createClientRepository(tDb, phoneRepo, deps.sealedBox);
+      const result = await clientRepo.findOrCreateByPhoneHash(
+        pending.phoneHash,
+        pending.opsEncryptedPhone,
+        pending.phoneMatchHash,
+      );
+
+      return resolveInboundTicket(
+        tDb,
+        result.client.id,
+        intakeQueueId,
+        "Quarantined voicemail routed by admin",
+      );
+    }
+    case "ticketId": {
+      const ticket = await tDb
+        .selectFrom("tickets")
+        .select(["id", "status"])
+        .where("id", "=", target.ticketId)
+        .executeTakeFirst();
+      if (!ticket) {
+        throw new NotFoundError("Target ticket not found");
+      }
+      if (ticket.status !== "open") {
+        throw new ValidationError("Target ticket is not open");
+      }
+      return ticket.id;
+    }
+  }
+}
+
+/**
+ * Writes the voicemail follow-up on the routed ticket. The decoded audio
+ * is plaintext, so it is held in a Buffer and zeroed in a finally block.
+ */
+async function writeRoutedFollowUp(
+  deps: RouteQuarantineDeps,
+  input: RouteQuarantineInput,
+  ticketId: TicketId,
+): Promise<FollowupId> {
+  // Decode base64 audio data into a Buffer (plaintext audio: relay rules apply)
+  const audioData = Buffer.from(input.audioData, "base64");
+
+  try {
+    if (audioData.length > VOICEMAIL_QUARANTINE_MAX_BYTES) {
+      throw new ValidationError("Decoded audio exceeds maximum allowed size");
+    }
+
+    const fuResult = await createEncryptedFollowUp(
+      deps.tDb,
+      ticketId,
+      Buffer.from("Voicemail recording", "utf-8"),
+      "voicemail",
+      "client",
+      {
+        recording: {
+          data: audioData,
+          durationSeconds: input.durationSeconds ?? 0,
+        },
+        blobStore: deps.blobStore,
+        orgSchema: deps.orgSchema,
+      },
+    );
+    return fuResult.followUpId;
+  } finally {
+    audioData.fill(0);
+  }
+}
+
+/**
+ * Returns a claimed quarantine row to pending after a failed route, so
+ * the voicemail stays in the queue. Only a claim held by this actor with
+ * no follow-up recorded is released.
+ */
+async function releaseQuarantineClaim(
+  tDb: Kysely<TenantDatabase>,
+  quarantineId: VoicemailQuarantineId,
+  actorId: UserId,
+): Promise<void> {
+  await tDb
+    .updateTable("voicemail_quarantine")
+    .set({
+      status: "pending",
+      resolved_by: null,
+      resolved_at: null,
+    })
+    .where("id", "=", quarantineId)
+    .where("status", "=", "routed")
+    .where("resolved_by", "=", actorId)
+    .where("routed_followup_id", "is", null)
+    .execute();
 }

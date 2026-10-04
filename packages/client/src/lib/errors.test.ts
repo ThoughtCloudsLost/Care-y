@@ -19,6 +19,8 @@ import {
   BrandingError,
   requireRouter,
   isUnauthorizedTrpcError,
+  hasTrpcErrorCode,
+  SavedFilterStorageError,
 } from "./errors.js";
 import { OrgKeyNotLoadedError } from "./crypto/org-key.js";
 
@@ -217,5 +219,37 @@ describe("isUnauthorizedTrpcError", () => {
     expect(isUnauthorizedTrpcError({ data: { code: "UNAUTHORIZED" } })).toBe(
       false,
     );
+  });
+});
+
+describe("hasTrpcErrorCode", () => {
+  it("is true when data.code matches the given code", () => {
+    expect(hasTrpcErrorCode(trpcErrorWithCode("FORBIDDEN"), "FORBIDDEN")).toBe(
+      true,
+    );
+  });
+
+  it("is false for another code", () => {
+    expect(
+      hasTrpcErrorCode(trpcErrorWithCode("INTERNAL_SERVER_ERROR"), "FORBIDDEN"),
+    ).toBe(false);
+  });
+
+  it("is false for a tRPC client error without data", () => {
+    expect(
+      hasTrpcErrorCode(TRPCClientError.from(new TypeError("x")), "FORBIDDEN"),
+    ).toBe(false);
+  });
+
+  it("is false for a plain Error", () => {
+    expect(hasTrpcErrorCode(new Error("x"), "FORBIDDEN")).toBe(false);
+  });
+});
+
+describe("SavedFilterStorageError", () => {
+  it("is a ClientError named SavedFilterStorageError", () => {
+    const err = new SavedFilterStorageError();
+    expect(err).toBeInstanceOf(ClientError);
+    expect(err.name).toBe("SavedFilterStorageError");
   });
 });

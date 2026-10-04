@@ -329,6 +329,10 @@ export interface SavedFiltersConfig {
   readonly ontoggleshare: (id: string) => void;
   /** Current user's ID for ownership checks on shared filters. */
   readonly currentUserId: string | null;
+  /** True when shared filters failed to load for a reason other than permission. */
+  readonly sharedLoadFailed?: boolean;
+  /** Retry the shared-filter fetch. */
+  readonly onretryshared?: () => void;
 }
 
 export interface ManageConfig {

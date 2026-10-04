@@ -244,6 +244,7 @@
     fetchNextPage: async () => articlesQuery.fetchNextPage(),
     isInitialLoading: () => articlesQuery.isLoading,
     loadedCount: () => allArticles.length,
+    totalCount: () => articleCount ?? undefined,
     matchCount: () => titleMatchIds.length,
   });
 
@@ -799,6 +800,13 @@
     deepSearchStatus={deepSearch.status}
     deepSearchSearched={deepSearch.searched}
     deepSearchTotal={deepSearch.total}
+    ondeepsearchretry={deepSearch.retry}
+    deepSearchIncompleteText={deepSearch.status === "incomplete"
+      ? m.search_deep_incomplete_articles({
+          searched: deepSearch.searched,
+          total: deepSearch.total,
+        })
+      : undefined}
   />
 {/snippet}
 

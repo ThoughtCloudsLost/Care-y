@@ -5,6 +5,7 @@ import {
   type FilterDispatchConfig,
 } from "./create-filter-dispatch.svelte.js";
 import type { SavedFilterRecord } from "@care-y/shared";
+import { SavedFilterStorageError } from "$lib/errors.js";
 
 function makeRecord(overrides?: Partial<SavedFilterRecord>): SavedFilterRecord {
   return {
@@ -220,6 +221,17 @@ describe("createFilterDispatch", () => {
       expect(clearAll).toHaveBeenCalledOnce();
       expect(onchange).toHaveBeenCalledOnce();
     });
+
+    it("clears without firing onchange when asked to skip it", () => {
+      const clearAll = vi.fn();
+      const onchange = vi.fn();
+      const d = createFilterDispatch(makeConfig({ clearAll, onchange }));
+
+      d.clearAll({ skipOnchange: true });
+
+      expect(clearAll).toHaveBeenCalledOnce();
+      expect(onchange).not.toHaveBeenCalled();
+    });
   });
 
   describe("saved filters", () => {
@@ -304,6 +316,22 @@ describe("createFilterDispatch", () => {
       expect(record.ownerId).toBe("user-1");
       expect(JSON.parse(record.state)).toEqual({ status: ["open"] });
       expect(cfg.savedFilters!.store.add).toHaveBeenCalledWith(record);
+    });
+
+    it("lets a SavedFilterStorageError from the store propagate", () => {
+      const cfg = makeSavedConfig();
+      vi.mocked(cfg.savedFilters!.store.add).mockImplementation(() => {
+        throw new SavedFilterStorageError();
+      });
+      const d = createFilterDispatch(cfg);
+
+      expect(() =>
+        d.handleCreateSavedFilter({
+          encryptedName: "enc-my-filter",
+          color: "green",
+          icon: "tag",
+        }),
+      ).toThrow(SavedFilterStorageError);
     });
 
     it("throws when creating saved filter without config", () => {

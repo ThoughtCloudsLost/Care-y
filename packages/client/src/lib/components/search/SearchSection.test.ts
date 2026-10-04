@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { Ticket } from "@lucide/svelte";
+import * as m from "$lib/paraglide/messages.js";
 import SearchSection from "./SearchSection.svelte";
 
 // IntersectionObserver is not available in jsdom (DecryptPlaceholder
@@ -36,6 +37,7 @@ interface OverrideProps {
   ondismiss?: () => void;
   onviewall?: (query: string) => void;
   onnavigate?: (href: string) => void;
+  onretry?: () => void;
 }
 
 function baseProps(overrides: OverrideProps = {}) {
@@ -165,5 +167,27 @@ describe("SearchSection", () => {
       props: baseProps({ onFullSearch: vi.fn() }),
     });
     expect(queryByRole("button", { name: /search the other/i })).toBeNull();
+  });
+
+  it("renders a retry button beside the coverage line and fires onretry", async () => {
+    const onretry = vi.fn();
+    const { getByRole } = render(SearchSection, {
+      props: baseProps({
+        coverageText: "Deeper search stopped. Searched 120 of 400 tickets.",
+        onretry,
+      }),
+    });
+    await fireEvent.click(getByRole("button", { name: m.common_retry() }));
+    expect(onretry).toHaveBeenCalledOnce();
+  });
+
+  it("renders no retry button without onretry", () => {
+    const { queryByRole } = render(SearchSection, {
+      props: baseProps({
+        coverageText:
+          "Searched 100 of 120 tickets already unlocked on this device.",
+      }),
+    });
+    expect(queryByRole("button", { name: m.common_retry() })).toBeNull();
   });
 });

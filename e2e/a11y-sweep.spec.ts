@@ -187,7 +187,11 @@ test.describe.serial("Accessibility sweep", () => {
 
   test("404 page passes the axe audit", async () => {
     await page.goto("/this-page-does-not-exist");
-    await expect(page.getByText("This page does not exist.")).toBeVisible();
+    // A full navigation restarts the key unlock, which on the instrumented
+    // bundle outlasts the default five seconds before the error page shows.
+    await expect(page.getByText("This page does not exist.")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
     await audit();
   });
 });
