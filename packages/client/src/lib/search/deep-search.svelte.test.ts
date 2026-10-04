@@ -55,6 +55,10 @@ interface ProviderRun {
   finish: (
     patch?: Partial<Pick<FullSearchState, "searched" | "total" | "matchCount">>,
   ) => void;
+  /** Apply a patch, notify, and reject the fullSearch promise. */
+  fail: (
+    patch?: Partial<Pick<FullSearchState, "searched" | "total" | "matchCount">>,
+  ) => void;
 }
 
 interface ProviderHandle {
@@ -88,7 +92,7 @@ function registerFullSearchProvider(id = "tickets"): ProviderHandle {
       onProgress: () => void,
       signal: AbortSignal,
     ) =>
-      new Promise<void>((resolve) => {
+      new Promise<void>((resolve, reject) => {
         runs.push({
           query,
           signal,
@@ -100,6 +104,11 @@ function registerFullSearchProvider(id = "tickets"): ProviderHandle {
             Object.assign(state, patch);
             onProgress();
             resolve();
+          },
+          fail(patch = {}) {
+            Object.assign(state, patch);
+            onProgress();
+            reject(new Error("provider run failed"));
           },
         });
       }),
@@ -138,14 +147,28 @@ interface HarnessOptions {
   fetchingNext?: boolean;
   /** Makes fetchNextPage reject instead of resolving. */
   failFetch?: boolean;
+  /**
+   * Makes fetchNextPage resolve with isFetchNextPageError set, the way
+   * TanStack reports a failed page without throwOnError.
+   */
+  failFetchResult?: boolean;
+  /** Server-reported dataset size; undefined when the server has not said. */
+  totalCount?: number;
+}
+
+/** The slice of TanStack's fetchNextPage result deep search reads. */
+interface FetchResult {
+  readonly isFetchNextPageError: boolean;
 }
 
 interface Harness {
   ds: DeepSearch;
   overlay: SearchOverlay;
-  fetchNextPage: Mock<() => Promise<unknown>>;
+  fetchNextPage: Mock<() => Promise<FetchResult>>;
   /** Resolve the oldest pending page fetch, mutating state first if given. */
   resolveNextFetch: (beforeResolve?: () => void) => void;
+  /** Reject the oldest pending page fetch. */
+  rejectNextFetch: () => void;
   setHasNext: (value: boolean) => void;
   setInitialLoading: (value: boolean) => void;
   setLoaded: (count: number) => void;
@@ -166,13 +189,19 @@ function createHarness(options: HarnessOptions = {}): Harness {
   // Never changes mid-test, so plain (non-reactive) is sufficient.
   const localMatchCount = options.localMatchCount ?? 5;
 
-  const pendingFetches: Array<() => void> = [];
-  const fetchNextPage = vi.fn((): Promise<unknown> => {
+  const pendingFetches: Array<{
+    resolve: (result: FetchResult) => void;
+    reject: (reason: Error) => void;
+  }> = [];
+  const fetchNextPage = vi.fn((): Promise<FetchResult> => {
     if (options.failFetch === true) {
       return Promise.reject(new Error("page fetch failed"));
     }
-    return new Promise<void>((resolve) => {
-      pendingFetches.push(resolve);
+    if (options.failFetchResult === true) {
+      return Promise.resolve({ isFetchNextPageError: true });
+    }
+    return new Promise<FetchResult>((resolve, reject) => {
+      pendingFetches.push({ resolve, reject });
     });
   });
 
@@ -193,6 +222,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
       fetchNextPage,
       isInitialLoading: () => initialLoading,
       loadedCount: () => loaded,
+      totalCount: () => options.totalCount,
       matchCount: () => localMatchCount,
     });
   });
@@ -211,12 +241,19 @@ function createHarness(options: HarnessOptions = {}): Harness {
     overlay,
     fetchNextPage,
     resolveNextFetch(beforeResolve) {
-      const resolve = pendingFetches.shift();
-      if (resolve === undefined) {
+      const pending = pendingFetches.shift();
+      if (pending === undefined) {
         throw new Error("no pending fetchNextPage call to resolve");
       }
       beforeResolve?.();
-      resolve();
+      pending.resolve({ isFetchNextPageError: false });
+    },
+    rejectNextFetch() {
+      const pending = pendingFetches.shift();
+      if (pending === undefined) {
+        throw new Error("no pending fetchNextPage call to reject");
+      }
+      pending.reject(new Error("page fetch failed"));
     },
     setHasNext(value) {
       hasNext = value;
@@ -692,7 +729,7 @@ describe("createDeepSearch", () => {
       expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
       expect(p.runs).toHaveLength(0);
       // Terminal, not "searching" forever and not a silent success.
-      expect(h.ds.status).toBe("done");
+      expect(h.ds.status).toBe("incomplete");
     });
 
     it("does not retrigger the failing fetch in a loop when there are no local matches", async () => {
@@ -710,6 +747,168 @@ describe("createDeepSearch", () => {
       await settle();
 
       expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
+      expect(p.runs).toHaveLength(0);
+      expect(h.ds.status).toBe("incomplete");
+    });
+  });
+
+  describe("stopped runs", () => {
+    it("stops at a page that resolves with isFetchNextPageError and never starts the provider run", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ hasNext: true, failFetchResult: true });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+      await settle();
+
+      expect(h.ds.status).toBe("incomplete");
+      expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
+      expect(p.runs).toHaveLength(0);
+    });
+
+    it("reports the loaded count against the server total after a fetch-phase failure", async () => {
+      registerFullSearchProvider();
+      const h = createHarness({
+        hasNext: true,
+        failFetchResult: true,
+        loaded: 20,
+        totalCount: 75,
+      });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+
+      expect(h.ds.status).toBe("incomplete");
+      expect(h.ds.searched).toBe(20);
+      expect(h.ds.total).toBe(75);
+    });
+
+    it("falls back to the loaded count as the total when the server total is unknown", async () => {
+      registerFullSearchProvider();
+      const h = createHarness({ hasNext: true, failFetch: true, loaded: 20 });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+
+      expect(h.ds.status).toBe("incomplete");
+      expect(h.ds.searched).toBe(20);
+      expect(h.ds.total).toBe(20);
+    });
+
+    it("reports the loaded count when the page withholds the total under a filter", async () => {
+      registerFullSearchProvider();
+      const h = createHarness({
+        hasNext: true,
+        failFetchResult: true,
+        loaded: 20,
+        totalCount: undefined,
+      });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+
+      expect(h.ds.status).toBe("incomplete");
+      expect(h.ds.searched).toBe(20);
+      expect(h.ds.total).toBe(20);
+    });
+
+    it("moves to incomplete with the provider's last progress when its run rejects in the content phase", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness();
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+      expect(p.runs).toHaveLength(1);
+
+      p.runs[0]?.progress({ searched: 30, total: 90 });
+      await settle();
+      p.runs[0]?.fail({ searched: 40 });
+      await settle();
+
+      expect(h.ds.status).toBe("incomplete");
+      expect(h.ds.searched).toBe(40);
+      expect(h.ds.total).toBe(90);
+    });
+
+    it("retries a stopped run from scratch and can then finish to done", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness();
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+      p.runs[0]?.fail({ searched: 10, total: 90 });
+      await settle();
+      expect(h.ds.status).toBe("incomplete");
+
+      h.ds.retry();
+      expect(p.reset).toHaveBeenCalledTimes(1);
+      expect(h.ds.status).toBe("searching");
+      await settle();
+      expect(p.runs).toHaveLength(2);
+      expect(p.runs[1]?.query).toBe("harbor");
+
+      p.runs[1]?.finish({ searched: 90, total: 90, matchCount: 4 });
+      await settle();
+      expect(h.ds.status).toBe("done");
+      expect(h.ds.searched).toBe(90);
+      expect(h.ds.total).toBe(90);
+    });
+
+    it("ignores retry when the run has not stopped", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ hasNext: true });
+
+      h.overlay.enter("harbor");
+      await settle();
+      h.ds.retry();
+      await settle();
+
+      expect(h.ds.status).toBe("idle");
+      expect(p.reset).not.toHaveBeenCalled();
+      expect(h.fetchNextPage).not.toHaveBeenCalled();
+      expect(p.runs).toHaveLength(0);
+    });
+
+    it("ignores a provider rejection that arrives after the term changed", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness();
+
+      h.overlay.enter("alpha");
+      h.ds.trigger();
+      await settle();
+      expect(p.runs).toHaveLength(1);
+
+      h.overlay.setTerm("beta");
+      await settle();
+      expect(h.ds.status).toBe("idle");
+
+      p.runs[0]?.fail({ searched: 5, total: 10 });
+      await settle();
+      expect(h.ds.status).toBe("idle");
+      expect(getFullSearchStateForProvider("tickets")).toBeUndefined();
+    });
+
+    it("ignores a page fetch rejection that arrives after the term changed", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ hasNext: true });
+
+      h.overlay.enter("alpha");
+      h.ds.trigger();
+      expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
+
+      h.overlay.setTerm("beta");
+      await settle();
+      expect(h.ds.status).toBe("idle");
+
+      h.rejectNextFetch();
+      await settle();
+      expect(h.ds.status).toBe("idle");
       expect(p.runs).toHaveLength(0);
     });
   });

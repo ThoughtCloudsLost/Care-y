@@ -21,6 +21,7 @@
   const isDone = $derived(
     states.length > 0 && states.every((s) => s.status === "done"),
   );
+  const anyIncomplete = $derived(states.some((s) => s.status === "incomplete"));
   const totalCachedItems = $derived(
     groups.reduce((sum, g) => sum + g.totalCached, 0),
   );
@@ -33,7 +34,9 @@
 
   const anyGroupLoading = $derived(groups.some((g) => g.loading));
 
-  // Auto-trigger when no matches exist in decrypted data
+  // Auto-trigger when no matches exist in decrypted data. An incomplete run
+  // is terminal like done; re-running it automatically would retry the
+  // failing provider in a loop.
   $effect(() => {
     if (
       fullSearchAvailable &&
@@ -42,6 +45,7 @@
       !anyGroupLoading &&
       !isSearching &&
       !isDone &&
+      !anyIncomplete &&
       totalCachedItems > 0
     ) {
       runFullSearch(query);
@@ -51,30 +55,40 @@
 
 {#if fullSearchAvailable}
   <div class="full-search-panel">
-    {#if isSearching}
+    {#if isSearching || anyIncomplete}
       <div class="progress-area">
-        <p class="progress-title">{m.search_full_progress_title()}</p>
+        {#if isSearching}
+          <p class="progress-title">{m.search_full_progress_title()}</p>
+        {/if}
         {#each states.filter((s) => s.status !== "idle") as providerState (providerState.providerId)}
           <div class="progress-row">
             <span class="progress-label">{providerState.label}</span>
             {#if providerState.status === "done"}
               <span class="progress-done">{m.search_full_done()}</span>
+            {:else if providerState.status === "incomplete"}
+              <span class="progress-done">{m.search_full_stopped()}</span>
             {:else}
-              <Progressbar
-                progress={providerState.searched /
-                  Math.max(providerState.total, 1)}
-              />
+              {#if providerState.total > 0}
+                <Progressbar
+                  progress={providerState.searched / providerState.total}
+                />
+              {/if}
               <span class="progress-count">
-                {m.search_full_progress({
-                  searched: providerState.searched,
-                  total: providerState.total,
-                })}
+                {#if providerState.total > 0}
+                  {m.search_full_progress({
+                    searched: providerState.searched,
+                    total: providerState.total,
+                  })}
+                {:else}
+                  {providerState.searched}
+                {/if}
               </span>
             {/if}
           </div>
         {/each}
       </div>
-    {:else if isDone}
+    {/if}
+    {#if isDone}
       <div class="done-area">
         <p class="done-text">
           {m.search_full_summary({
@@ -83,7 +97,7 @@
           })}
         </p>
       </div>
-    {:else}
+    {:else if !isSearching}
       <button type="button" class="panel-trigger num" onclick={handleTrigger}>
         {m.search_panel_trigger()}
       </button>

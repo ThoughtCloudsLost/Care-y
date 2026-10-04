@@ -97,6 +97,7 @@ export function searchAll(
         fsSearched: fs?.searched ?? 0,
         fsTotal: fs?.total ?? 0,
       }),
+      incomplete: fs?.status === "incomplete",
       // The calm escalation only offers itself before a full search has
       // run; while searching or after done the coverage line carries it.
       fetchMoreLabel:
@@ -138,7 +139,7 @@ export function getProvider(id: string): SearchProvider | undefined {
 export interface FullSearchProviderState {
   readonly providerId: string;
   readonly label: string;
-  status: "idle" | "searching" | "done";
+  status: "idle" | "searching" | "done" | "incomplete";
   searched: number;
   total: number;
   matchCount: number;
@@ -204,11 +205,20 @@ function startProviderRun(
     updateProviderState(provider.id, state);
   };
 
-  void provider.fullSearch(query, state, onProgress, signal).then(() => {
-    if (!isCurrentRun(provider.id, generation)) return;
-    state.status = "done";
-    updateProviderState(provider.id, state);
-  });
+  void provider.fullSearch(query, state, onProgress, signal).then(
+    () => {
+      if (!isCurrentRun(provider.id, generation)) return;
+      state.status = "done";
+      updateProviderState(provider.id, state);
+    },
+    // A failed run is terminal but must not report as a completed sweep,
+    // and leaving it at "searching" would hang the coverage line forever.
+    () => {
+      if (!isCurrentRun(provider.id, generation)) return;
+      state.status = "incomplete";
+      updateProviderState(provider.id, state);
+    },
+  );
 }
 
 function updateProviderState(providerId: string, state: FullSearchState): void {
