@@ -22,6 +22,8 @@
     readonly reachability?: VolunteerReachabilityWire;
     readonly selected?: boolean;
     readonly multiSelectActive?: boolean;
+    /** True while a bulk action runs: selection controls are inert. */
+    readonly locked?: boolean;
     /** Search term to highlight in the display name (search People cell). */
     readonly searchTerm?: string | null;
     readonly onedit: (userId: string) => void;
@@ -40,6 +42,7 @@
     reachability = "none",
     selected = false,
     multiSelectActive = false,
+    locked = false,
     searchTerm = null,
     onedit,
     onselect,
@@ -88,7 +91,7 @@
   });
 
   function handleCardClick(): void {
-    if (multiSelectActive) {
+    if (multiSelectActive && !locked) {
       onselect?.(userId);
     }
   }
@@ -119,8 +122,11 @@
       aria-label={multiSelectActive
         ? (displayName ?? userId.slice(0, 8))
         : undefined}
-      onclick={multiSelectActive ? handleCardClick : undefined}
-      onkeydown={multiSelectActive ? onKeyActivate(handleCardClick) : undefined}
+      aria-disabled={multiSelectActive && locked ? "true" : undefined}
+      onclick={multiSelectActive && !locked ? handleCardClick : undefined}
+      onkeydown={multiSelectActive && !locked
+        ? onKeyActivate(handleCardClick)
+        : undefined}
     >
       {#if multiSelectActive}
         <div
@@ -131,6 +137,7 @@
         >
           <Checkbox
             checked={selected}
+            disabled={locked}
             onchange={() => onselect?.(userId)}
             class="select-checkbox"
             colors={CHECKBOX_BRAND_COLORS}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as CryptoContext from "$lib/crypto/context.js";
 import type * as ShellContext from "$lib/shell/context.js";
@@ -156,5 +156,34 @@ describe("UserCard reachability chip", () => {
     const chipV = c1.querySelector("[data-testid='reachability-chip']");
     const chipS = c2.querySelector("[data-testid='reachability-chip']");
     expect(chipV!.textContent).not.toBe(chipS!.textContent);
+  });
+});
+
+describe("UserCard locked selection", () => {
+  afterEach(cleanup);
+
+  it("renders a disabled checkbox and ignores a click while locked", async () => {
+    const onselect = vi.fn();
+    const { container, getByRole } = render(UserCard, {
+      props: {
+        ...BASE_PROPS,
+        multiSelectActive: true,
+        selected: true,
+        locked: true,
+        onselect,
+      },
+    });
+
+    const checkbox = container.querySelector<HTMLInputElement>(
+      "input[type='checkbox']",
+    );
+    expect(checkbox).not.toBeNull();
+    expect(checkbox!.disabled).toBe(true);
+
+    const card = getByRole("button", { name: "Test User" });
+    expect(card.getAttribute("aria-disabled")).toBe("true");
+    await fireEvent.click(card);
+
+    expect(onselect).not.toHaveBeenCalled();
   });
 });

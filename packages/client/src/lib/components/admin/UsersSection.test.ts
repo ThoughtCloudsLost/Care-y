@@ -8,6 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { RoleId, ErrorCode } from "@care-y/shared";
 import type { UserRecord } from "$lib/admin/users-section-utils.js";
 import type * as BufferEncoding from "$lib/utils/buffer-encoding.js";
@@ -84,6 +85,23 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_users_batch_deactivate: () => "Deactivate selected",
   admin_users_batch_deactivated: ({ count }: { count: number }) =>
     `${count} deactivated`,
+  admin_users_batch_deactivate_result_done_one: () => "1 account deactivated.",
+  admin_users_batch_deactivate_result_done_other: ({
+    count,
+  }: {
+    count: number;
+  }) => `${count} accounts deactivated.`,
+  admin_users_batch_deactivate_result_refused_one: () =>
+    "1 could not be deactivated.",
+  admin_users_batch_deactivate_result_refused_other: ({
+    count,
+  }: {
+    count: number;
+  }) => `${count} could not be deactivated.`,
+  admin_batch_deactivate_title_one: () => "Deactivate 1 account?",
+  admin_batch_deactivate_title_other: ({ count }: { count: number }) =>
+    `Deactivate ${count} accounts?`,
+  admin_batch_deactivate_body: () => "Their keys are removed.",
   admin_users_exit_multiselect: () => "Exit select",
   admin_role_volunteer: () => "Volunteer",
   admin_role_manager: () => "Manager",
@@ -349,9 +367,8 @@ vi.mock(
   "./UserCard.svelte",
   async () =>
     ({
-      default: (
-        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-      ).default as unknown as (typeof UserCardNS)["default"],
+      default: (await import("./test-helpers/StubUserCard.svelte"))
+        .default as unknown as (typeof UserCardNS)["default"],
     }) satisfies typeof UserCardNS,
 );
 
@@ -448,6 +465,7 @@ function makeUser(id: string, overrides: Partial<UserData> = {}): UserData {
 }
 
 import UsersSection from "./UsersSection.svelte";
+import SnippetHost from "$lib/shell/test-helpers/SnippetHost.svelte";
 import type * as TrpcNS from "$lib/trpc/index.js";
 import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
 import type * as ShellActionSheetNS from "$lib/shell/ShellActionSheet.svelte";
@@ -885,6 +903,187 @@ describe("UsersSection", () => {
       component.toggleMultiSelect();
       expect(component.bulkActionsSnippet()).toBeDefined();
       expect(typeof component.bulkActionsSnippet()).toBe("function");
+    });
+
+    async function openBatchDialog(ids: readonly string[]): Promise<{
+      dialog: HTMLElement;
+      component: ReturnType<typeof UsersSection>;
+    }> {
+      const { component } = render(UsersSection);
+      component.toggleMultiSelect();
+      const bulkActions = component.bulkActionsSnippet();
+      if (bulkActions === undefined) {
+        throw new Error("bulk actions snippet missing in select mode");
+      }
+      render(SnippetHost, { props: { snippet: bulkActions } });
+      const bulkButton = await screen.findByRole("button", {
+        name: "Deactivate selected",
+      });
+      for (const id of ids) {
+        await fireEvent.click(screen.getByRole("button", { name: id }));
+      }
+      await fireEvent.click(bulkButton);
+      const dialog = await screen.findByTestId("stub-dialog");
+      return { dialog, component };
+    }
+
+    it("asks for confirmation before a bulk deactivation and sends nothing when cancelled", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2")];
+      const { dialog } = await openBatchDialog(["u-1", "u-2"]);
+
+      expect(within(dialog).getByText("Deactivate 2 accounts?")).toBeTruthy();
+      expect(within(dialog).getByText("Their keys are removed.")).toBeTruthy();
+      expect(mockSetUserActive).not.toHaveBeenCalled();
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Cancel" }),
+      );
+
+      expect(screen.queryByTestId("stub-dialog")).toBeNull();
+      expect(mockSetUserActive).not.toHaveBeenCalled();
+    });
+
+    it("names a single account in the bulk confirmation title", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2")];
+      const { dialog } = await openBatchDialog(["u-1"]);
+
+      expect(within(dialog).getByText("Deactivate 1 account?")).toBeTruthy();
+    });
+
+    it("deactivates every selected account after confirmation and leaves select mode", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2")];
+      const ids = ["u-1", "u-2"];
+      const { dialog, component } = await openBatchDialog(ids);
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("2 deactivated");
+      });
+      expect(mockSetUserActive).toHaveBeenCalledTimes(2);
+      expect(mockSetUserActive).toHaveBeenNthCalledWith(1, {
+        userId: "u-1",
+        isActive: false,
+      });
+      expect(mockSetUserActive).toHaveBeenNthCalledWith(2, {
+        userId: "u-2",
+        isActive: false,
+      });
+      expect(component.isMultiSelectActive()).toBe(false);
+    });
+
+    it("attempts every account past a refusal, reports the count, and keeps refused accounts selected", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2"), makeUser("u-3")];
+      mockSetUserActive
+        .mockResolvedValueOnce({ user: { isActive: false } })
+        .mockRejectedValueOnce(new Error(ErrorCode.SOLE_WRAP_HOLDER))
+        .mockResolvedValueOnce({ user: { isActive: false } });
+      const ids = ["u-1", "u-2", "u-3"];
+      const { dialog, component } = await openBatchDialog(ids);
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith(
+          "2 accounts deactivated. 1 could not be deactivated.",
+          3000,
+        );
+      });
+      expect(mockSetUserActive).toHaveBeenCalledTimes(3);
+      expect(mockSetUserActive).toHaveBeenNthCalledWith(3, {
+        userId: "u-3",
+        isActive: false,
+      });
+      expect(component.isMultiSelectActive()).toBe(true);
+      expect(
+        screen.getByRole("button", { name: "u-2", pressed: true }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "u-1", pressed: false }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "u-3", pressed: false }),
+      ).toBeTruthy();
+    });
+
+    it("uses the singular forms when one account is deactivated and one is refused", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2")];
+      mockSetUserActive
+        .mockResolvedValueOnce({ user: { isActive: false } })
+        .mockRejectedValueOnce(new Error(ErrorCode.SOLE_WRAP_HOLDER));
+      const { dialog } = await openBatchDialog(["u-1", "u-2"]);
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith(
+          "1 account deactivated. 1 could not be deactivated.",
+          3000,
+        );
+      });
+    });
+
+    it("keeps the bulk dialog title on the confirmed count while the run removes accounts from the selection", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2"), makeUser("u-3")];
+      const { dialog } = await openBatchDialog(["u-1", "u-2", "u-3"]);
+      expect(within(dialog).getByText("Deactivate 3 accounts?")).toBeTruthy();
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("3 deactivated");
+      });
+      const closedTitles = screen
+        .getAllByTestId("stub-dialog-closed")
+        .map((el) => el.getAttribute("data-title"));
+      expect(closedTitles).toContain("Deactivate 3 accounts?");
+    });
+
+    it("ignores the exit control, the header toggle and card toggles while a bulk deactivation runs", async () => {
+      mockUsersData = [makeUser("u-1"), makeUser("u-2"), makeUser("u-3")];
+      mockSetUserActive.mockReturnValueOnce(
+        new Promise<never>(() => undefined),
+      );
+      const { dialog, component } = await openBatchDialog(["u-1", "u-2"]);
+
+      await fireEvent.click(
+        within(dialog).getByRole("button", { name: "Deactivate" }),
+      );
+      await waitFor(() => {
+        expect(mockSetUserActive).toHaveBeenCalledTimes(1);
+      });
+      const cards = screen.getAllByTestId("stub-user-card");
+      expect(cards).toHaveLength(3);
+      for (const card of cards) {
+        expect(card.getAttribute("data-locked")).toBe("true");
+      }
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: "Exit select" }),
+      );
+      await fireEvent.click(screen.getByRole("button", { name: "u-2" }));
+      await fireEvent.click(screen.getByRole("button", { name: "u-3" }));
+      component.toggleMultiSelect();
+      await tick();
+
+      expect(component.isMultiSelectActive()).toBe(true);
+      expect(
+        screen.getByRole("button", { name: "u-1", pressed: true }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "u-2", pressed: true }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "u-3", pressed: false }),
+      ).toBeTruthy();
     });
   });
 
